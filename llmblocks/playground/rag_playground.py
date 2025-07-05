@@ -22,8 +22,8 @@ import os
 from llmblocks.blocks.rag import BasicRAG, StreamingRAG, MemoryRAG, RAGConfig, create_rag
 from llmblocks.core.config_loader import ConfigLoader
 from llmblocks.core.llm_providers import LLMProviderFactory
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Page configuration
 st.set_page_config(
@@ -133,12 +133,12 @@ def process_documents(documents: List[Document], chunk_size: int, chunk_overlap:
     """Process documents with text splitting."""
     if not documents:
         return []
-    
+
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap
     )
-    
+
     processed_docs = []
     for doc in documents:
         chunks = text_splitter.split_text(doc.page_content)
@@ -151,7 +151,7 @@ def process_documents(documents: List[Document], chunk_size: int, chunk_overlap:
                     "total_chunks": len(chunks)
                 }
             ))
-    
+
     return processed_docs
 
 def create_rag_config_from_ui() -> RAGConfig:
@@ -175,17 +175,17 @@ def create_rag_config_from_ui() -> RAGConfig:
 def display_metrics(documents: List[Document], processed_docs: List[Document]):
     """Display document processing metrics."""
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric("Original Documents", len(documents))
-    
+
     with col2:
         st.metric("Processed Chunks", len(processed_docs))
-    
+
     with col3:
         avg_chunk_size = sum(len(doc.page_content) for doc in processed_docs) / len(processed_docs) if processed_docs else 0
         st.metric("Avg Chunk Size", f"{avg_chunk_size:.0f} chars")
-    
+
     with col4:
         total_chars = sum(len(doc.page_content) for doc in processed_docs)
         st.metric("Total Characters", f"{total_chars:,}")
@@ -194,9 +194,9 @@ def display_document_preview(documents: List[Document]):
     """Display a preview of uploaded documents."""
     if not documents:
         return
-    
+
     st.subheader("📄 Document Preview")
-    
+
     # Create a DataFrame for better display
     doc_data = []
     for i, doc in enumerate(documents[:5]):  # Show first 5 documents
@@ -207,10 +207,10 @@ def display_document_preview(documents: List[Document]):
             "Content Preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
             "Length": len(doc.page_content)
         })
-    
+
     df = pd.DataFrame(doc_data)
     st.dataframe(df, use_container_width=True)
-    
+
     if len(documents) > 5:
         st.info(f"Showing first 5 of {len(documents)} documents. Upload more to see additional previews.")
 
@@ -233,17 +233,17 @@ def display_runnable_info():
 def main():
     """Main playground application."""
     initialize_session_state()
-    
+
     # Header
     st.markdown('<h1 class="main-header">🧩 LLMBlocks RAG Playground</h1>', unsafe_allow_html=True)
-    
+
     # Display Runnable interface info
     display_runnable_info()
-    
+
     # Sidebar for configuration
     with st.sidebar:
         st.header("⚙️ Configuration")
-        
+
         # RAG Type Selection
         st.subheader("RAG Type")
         rag_type = st.selectbox(
@@ -251,7 +251,7 @@ def main():
             ["Basic", "Streaming", "Memory"],
             help="Basic: Simple Q&A, Streaming: Real-time responses, Memory: Conversation history"
         )
-        
+
         # Document Processing Settings
         st.subheader("📄 Document Processing")
         st.session_state.chunk_size = st.slider(
@@ -262,7 +262,7 @@ def main():
             step=100,
             help="Size of text chunks for processing"
         )
-        
+
         st.session_state.chunk_overlap = st.slider(
             "Chunk Overlap",
             min_value=0,
@@ -271,10 +271,10 @@ def main():
             step=50,
             help="Overlap between consecutive chunks"
         )
-        
+
         # LLM Settings
         st.subheader("🤖 LLM Settings")
-        
+
         # Provider selection
         available_providers = LLMProviderFactory.list_providers()
         st.session_state.llm_provider = st.selectbox(
@@ -282,7 +282,7 @@ def main():
             available_providers,
             help="Select the LLM provider"
         )
-        
+
         # Provider-specific model selection
         provider_models = {
             'openai': ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o"],
@@ -292,14 +292,14 @@ def main():
             'anthropic': ["claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-opus-20240229"],
             'ollama': ["llama2", "llama2:13b", "llama2:70b", "mistral", "codellama"]
         }
-        
+
         models = provider_models.get(st.session_state.llm_provider, ["gpt-3.5-turbo"])
         st.session_state.llm_model = st.selectbox(
             "Model",
             models,
             help=f"Select {st.session_state.llm_provider} model"
         )
-        
+
         # Provider-specific settings
         if st.session_state.llm_provider == 'huggingface':
             st.session_state.llm_task = st.selectbox(
@@ -307,21 +307,21 @@ def main():
                 ["text-generation", "conversational"],
                 help="Hugging Face model task"
             )
-        
+
         if st.session_state.llm_provider == 'ollama':
             st.session_state.llm_base_url = st.text_input(
                 "Ollama Base URL",
                 value="http://localhost:11434",
                 help="Ollama server URL"
             )
-        
+
         # API Key input (optional, can use environment variables)
         st.session_state.llm_api_key = st.text_input(
             "API Key (optional)",
             type="password",
             help="Leave empty to use environment variable"
         )
-        
+
         st.session_state.temperature = st.slider(
             "Temperature",
             min_value=0.0,
@@ -330,7 +330,7 @@ def main():
             step=0.1,
             help="Creativity level (0 = focused, 1 = creative)"
         )
-        
+
         st.session_state.max_tokens = st.slider(
             "Max Tokens",
             min_value=100,
@@ -339,7 +339,7 @@ def main():
             step=100,
             help="Maximum response length"
         )
-        
+
         st.session_state.top_k = st.slider(
             "Top K",
             min_value=1,
@@ -347,7 +347,7 @@ def main():
             value=4,
             help="Number of documents to retrieve"
         )
-        
+
         # Feature toggles
         st.subheader("🔧 Features")
         st.session_state.memory_enabled = st.checkbox(
@@ -355,20 +355,20 @@ def main():
             value=False,
             help="Remember conversation history"
         )
-        
+
         st.session_state.streaming_enabled = st.checkbox(
             "Enable Streaming",
             value=False,
             help="Stream responses in real-time"
         )
-        
+
         # Pipeline status
         st.subheader("📊 Status")
         if st.session_state.pipeline_initialized:
             st.success("✅ Pipeline Ready")
         else:
             st.warning("⚠️ Pipeline Not Initialized")
-        
+
         # Clear button
         if st.button("🗑️ Clear All", type="secondary"):
             st.session_state.documents = []
@@ -378,13 +378,13 @@ def main():
             st.session_state.uploaded_files = []
             st.session_state.batch_questions = []
             st.rerun()
-    
+
     # Main content area
     col1, col2 = st.columns([2, 1])
-    
+
     with col1:
         st.header("📤 Document Upload")
-        
+
         # File upload
         uploaded_files = st.file_uploader(
             "Upload documents",
@@ -392,7 +392,7 @@ def main():
             accept_multiple_files=True,
             help="Upload text files to create your knowledge base"
         )
-        
+
         # Text input
         text_input = st.text_area(
             "Or paste text directly",
@@ -400,7 +400,7 @@ def main():
             placeholder="Paste your text here...",
             help="Enter text content directly"
         )
-        
+
         # Process uploads
         if uploaded_files or text_input:
             if uploaded_files:
@@ -409,59 +409,59 @@ def main():
                         docs = create_documents_from_file(uploaded_file)
                         st.session_state.documents.extend(docs)
                         st.session_state.uploaded_files.append(uploaded_file.name)
-            
+
             if text_input:
                 docs = create_documents_from_text(text_input)
                 st.session_state.documents.extend(docs)
-        
+
         # Display document info
         if st.session_state.documents:
             st.success(f"✅ Loaded {len(st.session_state.documents)} documents")
             display_document_preview(st.session_state.documents)
-            
+
             # Process documents
             processed_docs = process_documents(
                 st.session_state.documents,
                 st.session_state.chunk_size,
                 st.session_state.chunk_overlap
             )
-            
+
             display_metrics(st.session_state.documents, processed_docs)
-            
+
             # Initialize pipeline button
             if st.button("🚀 Initialize RAG Pipeline", type="primary"):
                 with st.spinner("Initializing RAG pipeline..."):
                     try:
                         config = create_rag_config_from_ui()
-                        
+
                         # Map UI selection to RAG type
                         rag_type_map = {
                             "Basic": "basic",
                             "Streaming": "streaming", 
                             "Memory": "memory"
                         }
-                        
+
                         st.session_state.rag_pipeline = create_rag(
                             rag_type_map[rag_type],
                             config
                         )
-                        
+
                         # Initialize and add documents
                         with st.session_state.rag_pipeline:
                             st.session_state.rag_pipeline.add_documents(processed_docs)
-                        
+
                         st.session_state.pipeline_initialized = True
                         st.success("✅ RAG pipeline initialized successfully!")
-                        
+
                     except NotImplementedError as e:
                         st.error(f"❌ Embedding setup required: {e}")
                         st.info("💡 This playground requires proper embedding setup. See documentation for details.")
                     except Exception as e:
                         st.error(f"❌ Error initializing pipeline: {e}")
-    
+
     with col2:
         st.header("📋 Quick Actions")
-        
+
         # Sample questions
         st.subheader("💡 Sample Questions")
         sample_questions = [
@@ -471,11 +471,11 @@ def main():
             "Explain the main concepts",
             "What are the important details?"
         ]
-        
+
         for question in sample_questions:
             if st.button(question, key=f"sample_{question}"):
                 st.session_state.current_question = question
-        
+
         # Batch processing section
         if st.session_state.pipeline_initialized:
             st.subheader("🔄 Batch Processing")
@@ -485,16 +485,16 @@ def main():
                 placeholder="Question 1\nQuestion 2\nQuestion 3",
                 help="Process multiple questions at once using .batch()"
             )
-            
+
             if batch_input and st.button("🚀 Process Batch"):
                 questions = [q.strip() for q in batch_input.split('\n') if q.strip()]
                 if questions:
                     with st.spinner(f"Processing {len(questions)} questions..."):
                         try:
                             responses = st.session_state.rag_pipeline.batch(questions)
-                            
+
                             st.success(f"✅ Processed {len(questions)} questions")
-                            
+
                             # Display batch results
                             for i, (question, response) in enumerate(zip(questions, responses)):
                                 with st.expander(f"Q{i+1}: {question[:50]}...", expanded=False):
@@ -502,11 +502,11 @@ def main():
                                     st.markdown(f"**Response:** {response}")
                         except Exception as e:
                             st.error(f"❌ Error in batch processing: {e}")
-    
+
     # Chat interface
     if st.session_state.pipeline_initialized:
         st.header("💬 Chat Interface")
-        
+
         # Question input
         question = st.text_input(
             "Ask a question",
@@ -514,18 +514,18 @@ def main():
             placeholder="Type your question here...",
             key="question_input"
         )
-        
+
         # Clear current question after use
         if 'current_question' in st.session_state:
             del st.session_state.current_question
-        
+
         if question:
             col1, col2 = st.columns([3, 1])
-            
+
             with col1:
                 # Display question
                 st.markdown(f"**You:** {question}")
-                
+
                 # Get response using new invoke() method
                 with st.spinner("Generating response..."):
                     try:
@@ -533,7 +533,7 @@ def main():
                             # Streaming response using new stream() method
                             response_placeholder = st.empty()
                             full_response = ""
-                            
+
                             for chunk in st.session_state.rag_pipeline.stream(question):
                                 full_response += chunk
                                 response_placeholder.markdown(f"**Assistant:** {full_response}")
@@ -543,26 +543,26 @@ def main():
                             response = st.session_state.rag_pipeline.invoke(question)
                             st.markdown(f"**Assistant:** {response}")
                             full_response = response
-                        
+
                         # Add to conversation history
                         st.session_state.conversation_history.append({
                             "question": question,
                             "answer": full_response,
                             "timestamp": time.time()
                         })
-                        
+
                     except Exception as e:
                         st.error(f"❌ Error generating response: {e}")
-            
+
             with col2:
                 # Response metrics
                 st.metric("Response Length", len(full_response))
                 st.metric("History Entries", len(st.session_state.conversation_history))
-        
+
         # Conversation history
         if st.session_state.conversation_history:
             st.header("📜 Conversation History")
-            
+
             # Export button
             col1, col2 = st.columns([1, 4])
             with col1:
@@ -577,26 +577,26 @@ def main():
                             "temperature": st.session_state.temperature
                         }
                     }
-                    
+
                     st.download_button(
                         label="Download JSON",
                         data=json.dumps(history_data, indent=2),
                         file_name="rag_conversation.json",
                         mime="application/json"
                     )
-            
+
             with col2:
                 if st.button("🗑️ Clear History"):
                     st.session_state.conversation_history = []
                     st.rerun()
-            
+
             # Display history
             for i, entry in enumerate(reversed(st.session_state.conversation_history)):
                 with st.expander(f"Q{i+1}: {entry['question'][:50]}...", expanded=False):
                     st.markdown(f"**Question:** {entry['question']}")
                     st.markdown(f"**Answer:** {entry['answer']}")
                     st.caption(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(entry['timestamp']))}")
-    
+
     # Footer
     st.markdown("---")
     st.markdown(
