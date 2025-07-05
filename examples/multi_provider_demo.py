@@ -24,7 +24,7 @@ sys.path.insert(0, str(project_root))
 from llmblocks.blocks.rag import BasicRAG, RAGConfig, create_rag
 from llmblocks.core.config_loader import ConfigLoader
 from llmblocks.core.llm_providers import LLMProviderFactory
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 
 def create_sample_documents() -> List[Document]:
@@ -48,7 +48,7 @@ def create_sample_documents() -> List[Document]:
 def demo_provider_info():
     """Display information about available providers."""
     print("\n=== Available LLM Providers ===")
-    
+
     for provider_name in LLMProviderFactory.list_providers():
         try:
             info = LLMProviderFactory.get_provider_info(provider_name)
@@ -63,13 +63,13 @@ def demo_provider_info():
 def demo_openai_rag():
     """Demonstrate OpenAI RAG pipeline."""
     print("\n=== OpenAI RAG Demo ===")
-    
+
     try:
         # Check if OpenAI API key is available
         if not os.getenv('OPENAI_API_KEY'):
             print("⚠️  OPENAI_API_KEY not set. Skipping OpenAI demo.")
             return
-        
+
         config = RAGConfig(
             name="openai_demo",
             llm_provider="openai",
@@ -77,19 +77,19 @@ def demo_openai_rag():
             temperature=0.1,
             max_tokens=500
         )
-        
+
         rag = create_rag("basic", config)
         documents = create_sample_documents()
-        
+
         with rag:
             rag.add_documents(documents)
-            
+
             question = "What is LLMBlocks and what providers does it support?"
             print(f"Question: {question}")
-            
+
             answer = rag.query(question)
             print(f"Answer: {answer}")
-            
+
     except Exception as e:
         print(f"❌ OpenAI demo failed: {e}")
 
@@ -97,13 +97,13 @@ def demo_openai_rag():
 def demo_google_rag():
     """Demonstrate Google Gemini RAG pipeline."""
     print("\n=== Google Gemini RAG Demo ===")
-    
+
     try:
         # Check if Google API key is available
         if not os.getenv('GOOGLE_API_KEY'):
             print("⚠️  GOOGLE_API_KEY not set. Skipping Google demo.")
             return
-        
+
         config = RAGConfig(
             name="google_demo",
             llm_provider="google",
@@ -111,19 +111,19 @@ def demo_google_rag():
             temperature=0.1,
             max_tokens=500
         )
-        
+
         rag = create_rag("basic", config)
         documents = create_sample_documents()
-        
+
         with rag:
             rag.add_documents(documents)
-            
+
             question = "Explain RAG and how it works in LLMBlocks."
             print(f"Question: {question}")
-            
+
             answer = rag.query(question)
             print(f"Answer: {answer}")
-            
+
     except Exception as e:
         print(f"❌ Google demo failed: {e}")
 
@@ -131,13 +131,13 @@ def demo_google_rag():
 def demo_huggingface_rag():
     """Demonstrate Hugging Face RAG pipeline."""
     print("\n=== Hugging Face RAG Demo ===")
-    
+
     try:
         # Check if Hugging Face API key is available
         if not os.getenv('HUGGINGFACE_API_KEY'):
             print("⚠️  HUGGINGFACE_API_KEY not set. Skipping Hugging Face demo.")
             return
-        
+
         config = RAGConfig(
             name="huggingface_demo",
             llm_provider="huggingface",
@@ -146,19 +146,19 @@ def demo_huggingface_rag():
             temperature=0.1,
             max_tokens=500
         )
-        
+
         rag = create_rag("basic", config)
         documents = create_sample_documents()
-        
+
         with rag:
             rag.add_documents(documents)
-            
+
             question = "What are the main features of LLMBlocks?"
             print(f"Question: {question}")
-            
+
             answer = rag.query(question)
             print(f"Answer: {answer}")
-            
+
     except Exception as e:
         print(f"❌ Hugging Face demo failed: {e}")
 
@@ -166,13 +166,13 @@ def demo_huggingface_rag():
 def demo_groq_rag():
     """Demonstrate Groq RAG pipeline."""
     print("\n=== Groq RAG Demo ===")
-    
+
     try:
         # Check if Groq API key is available
         if not os.getenv('GROQ_API_KEY'):
             print("⚠️  GROQ_API_KEY not set. Skipping Groq demo.")
             return
-        
+
         config = RAGConfig(
             name="groq_demo",
             llm_provider="groq",
@@ -180,19 +180,19 @@ def demo_groq_rag():
             temperature=0.1,
             max_tokens=500
         )
-        
+
         rag = create_rag("basic", config)
         documents = create_sample_documents()
-        
+
         with rag:
             rag.add_documents(documents)
-            
+
             question = "How does LLMBlocks handle different providers?"
             print(f"Question: {question}")
-            
+
             answer = rag.query(question)
             print(f"Answer: {answer}")
-            
+
     except Exception as e:
         print(f"❌ Groq demo failed: {e}")
 
@@ -200,13 +200,13 @@ def demo_groq_rag():
 def demo_anthropic_rag():
     """Demonstrate Anthropic RAG pipeline."""
     print("\n=== Anthropic RAG Demo ===")
-    
+
     try:
         # Check if Anthropic API key is available
         if not os.getenv('ANTHROPIC_API_KEY'):
             print("⚠️  ANTHROPIC_API_KEY not set. Skipping Anthropic demo.")
             return
-        
+
         config = RAGConfig(
             name="anthropic_demo",
             llm_provider="anthropic",
@@ -214,19 +214,19 @@ def demo_anthropic_rag():
             temperature=0.1,
             max_tokens=500
         )
-        
+
         rag = create_rag("basic", config)
         documents = create_sample_documents()
-        
+
         with rag:
             rag.add_documents(documents)
-            
+
             question = "What makes LLMBlocks modular and extensible?"
             print(f"Question: {question}")
-            
+
             answer = rag.query(question)
             print(f"Answer: {answer}")
-            
+
     except Exception as e:
         print(f"❌ Anthropic demo failed: {e}")
 
@@ -234,7 +234,7 @@ def demo_anthropic_rag():
 def demo_ollama_rag():
     """Demonstrate Ollama RAG pipeline."""
     print("\n=== Ollama RAG Demo ===")
-    
+
     try:
         config = RAGConfig(
             name="ollama_demo",
@@ -244,19 +244,19 @@ def demo_ollama_rag():
             temperature=0.1,
             max_tokens=500
         )
-        
+
         rag = create_rag("basic", config)
         documents = create_sample_documents()
-        
+
         with rag:
             rag.add_documents(documents)
-            
+
             question = "What is the purpose of the LLMBlocks framework?"
             print(f"Question: {question}")
-            
+
             answer = rag.query(question)
             print(f"Answer: {answer}")
-            
+
     except Exception as e:
         print(f"❌ Ollama demo failed: {e}")
         print("💡 Make sure Ollama is running locally with: ollama serve")
@@ -265,7 +265,7 @@ def demo_ollama_rag():
 def demo_config_loading():
     """Demonstrate loading configurations for different providers."""
     print("\n=== Configuration Loading Demo ===")
-    
+
     try:
         # Load different provider configurations
         config_files = [
@@ -275,7 +275,7 @@ def demo_config_loading():
             "llmblocks/config/groq_rag.yaml",
             "llmblocks/config/ollama_rag.yaml"
         ]
-        
+
         for config_file in config_files:
             if Path(config_file).exists():
                 print(f"\nLoading {config_file}...")
@@ -285,7 +285,7 @@ def demo_config_loading():
                 print(f"  Temperature: {config.temperature}")
             else:
                 print(f"\n⚠️  Config file not found: {config_file}")
-                
+
     except Exception as e:
         print(f"❌ Config loading demo failed: {e}")
 
@@ -294,10 +294,10 @@ def main():
     """Run all provider demonstrations."""
     print("🧩 LLMBlocks Multi-Provider Demo")
     print("=" * 50)
-    
+
     # Show provider information
     demo_provider_info()
-    
+
     # Run provider demos
     demos = [
         demo_openai_rag,
@@ -307,16 +307,16 @@ def main():
         demo_anthropic_rag,
         demo_ollama_rag
     ]
-    
+
     for demo in demos:
         try:
             demo()
         except Exception as e:
             print(f"❌ Demo failed: {e}")
-    
+
     # Configuration loading demo
     demo_config_loading()
-    
+
     print("\n" + "=" * 50)
     print("🎉 Multi-provider demo completed!")
     print("\n💡 Tips:")

@@ -8,7 +8,7 @@ try:
     from langchain_core.runnables.base import Runnable
 except ImportError:
     # Fallback for older LangChain versions
-    from langchain.schema.runnable import Runnable
+    from langchain_core.runnables import Runnable
 
 @dataclass
 class ComponentConfig:
@@ -20,19 +20,19 @@ class ComponentConfig:
 
 class BaseComponent(ABC):
     """Base class for all LLMBlocks components."""
-    
+
     def __init__(self, config: Optional[ComponentConfig] = None, **kwargs):
         self.config = config or ComponentConfig(name=self.__class__.__name__)
         self.logger = logging.getLogger(f"llmblocks.{self.__class__.__name__}")
         self._setup_logging()
-        
+
         # Update config with any additional kwargs
         for key, value in kwargs.items():
             if hasattr(self.config, key):
                 setattr(self.config, key, value)
             else:
                 self.config.metadata[key] = value
-    
+
     def _setup_logging(self):
         """Setup component-specific logging."""
         if not self.logger.handlers:
@@ -43,21 +43,21 @@ class BaseComponent(ABC):
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
-    
+
     @abstractmethod
     def initialize(self) -> None:
         """Initialize the component."""
         pass
-    
+
     @abstractmethod
     def cleanup(self) -> None:
         """Cleanup resources."""
         pass
-    
+
     def get_config(self) -> ComponentConfig:
         """Get the component configuration."""
         return self.config
-    
+
     def update_config(self, **kwargs) -> None:
         """Update component configuration."""
         for key, value in kwargs.items():
@@ -65,12 +65,12 @@ class BaseComponent(ABC):
                 setattr(self.config, key, value)
             else:
                 self.config.metadata[key] = value
-    
+
     def __enter__(self):
         """Context manager entry."""
         self.initialize()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.cleanup()
@@ -86,11 +86,11 @@ class BaseBlock(Runnable, BaseComponent):
     - Context manager support for initialization/cleanup
     - Logging and configuration management
     """
-    
+
     def __init__(self, config: Optional[ComponentConfig] = None, **kwargs):
         BaseComponent.__init__(self, config, **kwargs)
         Runnable.__init__(self)
-    
+
     @abstractmethod
     def invoke(self, input: Any, config: Optional[Dict[str, Any]] = None) -> Any:
         """
@@ -104,7 +104,7 @@ class BaseBlock(Runnable, BaseComponent):
             The processed output.
         """
         pass
-    
+
     def batch(self, inputs: List[Any], config: Optional[Dict[str, Any]] = None) -> List[Any]:
         """
         Execute the block with multiple inputs in batch.
@@ -117,7 +117,7 @@ class BaseBlock(Runnable, BaseComponent):
             List of processed outputs.
         """
         return [self.invoke(input, config) for input in inputs]
-    
+
     def stream(self, input: Any, config: Optional[Dict[str, Any]] = None) -> Generator[Any, None, None]:
         """
         Execute the block with streaming output.
@@ -138,11 +138,11 @@ class BaseBlock(Runnable, BaseComponent):
         else:
             # For other types, yield the full result
             yield result
-    
+
     def __repr__(self) -> str:
         """Return a string representation of the block."""
         return f"{self.__class__.__name__}(name='{self.config.name}')"
-    
+
     def __or__(self, other):
         """
         Enable chaining with the | operator.

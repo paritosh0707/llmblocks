@@ -18,7 +18,7 @@ from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 
 from llmblocks.blocks.rag import BasicRAG, StreamingRAG, MemoryRAG, RAGConfig, create_rag
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 # Load environment variables
 load_dotenv()
@@ -73,7 +73,7 @@ def create_sample_documents() -> List[Document]:
 def basic_rag_example():
     """Demonstrate basic RAG functionality with both invoke() and query() methods."""
     print("=== Basic RAG Example ===")
-    
+
     # Create RAG configuration
     config = RAGConfig(
         name="basic_rag_demo",
@@ -83,22 +83,22 @@ def basic_rag_example():
         llm_model="gpt-3.5-turbo",
         temperature=0.1
     )
-    
+
     # Create RAG pipeline
     rag = BasicRAG(config)
-    
+
     # Initialize and add documents
     with rag:
         documents = create_sample_documents()
         rag.add_documents(documents)
-        
+
         # Query the RAG pipeline using both methods
         questions = [
             "What is LLMBlocks?",
             "What are the main components of the project structure?",
             "What is the tech stack used in LLMBlocks?"
         ]
-        
+
         print("\n--- Using .invoke() method (new Runnable interface) ---")
         for question in questions:
             print(f"\nQuestion: {question}")
@@ -109,7 +109,7 @@ def basic_rag_example():
             except NotImplementedError as e:
                 print(f"Error: {e}")
                 print("Note: This example requires proper embedding setup")
-        
+
         print("\n--- Using .query() method (backward compatibility) ---")
         for question in questions:
             print(f"\nQuestion: {question}")
@@ -124,7 +124,7 @@ def basic_rag_example():
 def streaming_rag_example():
     """Demonstrate streaming RAG functionality with new stream() method."""
     print("\n=== Streaming RAG Example ===")
-    
+
     # Create streaming RAG
     rag = create_rag("streaming", 
                      chunk_size=500,
@@ -132,17 +132,17 @@ def streaming_rag_example():
                      top_k=3,
                      llm_model="gpt-3.5-turbo",
                      temperature=0.1)
-    
+
     # Initialize and add documents
     with rag:
         documents = create_sample_documents()
         rag.add_documents(documents)
-        
+
         # Query with streaming using new stream() method
         question = "Explain the priority modules for the MVP"
         print(f"\nQuestion: {question}")
         print("Answer (streaming with .stream()): ", end="", flush=True)
-        
+
         try:
             # New stream() method
             for chunk in rag.stream(question):
@@ -151,7 +151,7 @@ def streaming_rag_example():
         except NotImplementedError as e:
             print(f"\nError: {e}")
             print("Note: This example requires proper embedding setup")
-        
+
         # Also demonstrate backward compatibility
         print("\nAnswer (streaming with .query_stream()): ", end="", flush=True)
         try:
@@ -166,7 +166,7 @@ def streaming_rag_example():
 def memory_rag_example():
     """Demonstrate RAG with memory functionality."""
     print("\n=== Memory RAG Example ===")
-    
+
     # Create memory RAG
     rag = create_rag("memory",
                      chunk_size=500,
@@ -174,12 +174,12 @@ def memory_rag_example():
                      top_k=3,
                      llm_model="gpt-3.5-turbo",
                      temperature=0.1)
-    
+
     # Initialize and add documents
     with rag:
         documents = create_sample_documents()
         rag.add_documents(documents)
-        
+
         # Conversation flow using invoke() method
         conversation = [
             "What is LLMBlocks?",
@@ -187,7 +187,7 @@ def memory_rag_example():
             "Can you tell me more about the blocks.rag module specifically?",
             "What about the memory systems you mentioned earlier?"
         ]
-        
+
         try:
             for i, question in enumerate(conversation, 1):
                 print(f"\nTurn {i}:")
@@ -195,7 +195,7 @@ def memory_rag_example():
                 # Using new invoke() method
                 answer = rag.invoke(question)
                 print(f"Answer: {answer}")
-                
+
                 # Show memory state
                 print(f"Memory entries: {len(rag.conversation_history)}")
         except NotImplementedError as e:
@@ -205,7 +205,7 @@ def memory_rag_example():
 def batch_processing_example():
     """Demonstrate batch processing with the new batch() method."""
     print("\n=== Batch Processing Example ===")
-    
+
     # Create RAG pipeline
     rag = create_rag("basic",
                      chunk_size=500,
@@ -213,12 +213,12 @@ def batch_processing_example():
                      top_k=3,
                      llm_model="gpt-3.5-turbo",
                      temperature=0.1)
-    
+
     # Initialize and add documents
     with rag:
         documents = create_sample_documents()
         rag.add_documents(documents)
-        
+
         # Batch questions
         questions = [
             "What is LLMBlocks?",
@@ -226,12 +226,12 @@ def batch_processing_example():
             "What is the tech stack?",
             "What are the priority modules?"
         ]
-        
+
         try:
             print("Processing questions in batch...")
             # New batch() method
             answers = rag.batch(questions)
-            
+
             for question, answer in zip(questions, answers):
                 print(f"\nQ: {question}")
                 print(f"A: {answer}")
@@ -242,7 +242,7 @@ def batch_processing_example():
 def chaining_example():
     """Demonstrate chaining capabilities with the | operator."""
     print("\n=== Chaining Example ===")
-    
+
     # Create RAG pipeline
     rag = create_rag("basic",
                      chunk_size=500,
@@ -250,38 +250,38 @@ def chaining_example():
                      top_k=3,
                      llm_model="gpt-3.5-turbo",
                      temperature=0.1)
-    
+
     # Initialize and add documents
     with rag:
         documents = create_sample_documents()
         rag.add_documents(documents)
-        
+
         # Create a simple post-processor (example of what could be chained)
         class SimplePostProcessor:
             def invoke(self, input: str, config: Optional[Dict[str, Any]] = None) -> str:
                 """Add a prefix to the response."""
                 return f"[Processed] {input}"
-            
+
             def __or__(self, other):
                 """Enable chaining."""
                 return self.chain(other)
-        
+
         post_processor = SimplePostProcessor()
-        
+
         try:
             # Demonstrate chaining (this would work with proper LangChain integration)
             print("Chaining RAG with post-processor...")
             # pipeline = rag | post_processor  # This would work with proper integration
             # result = pipeline.invoke("What is LLMBlocks?")
-            
+
             # For now, demonstrate the concept
             question = "What is LLMBlocks?"
             rag_result = rag.invoke(question)
             final_result = post_processor.invoke(rag_result)
-            
+
             print(f"Original: {rag_result}")
             print(f"Chained: {final_result}")
-            
+
         except NotImplementedError as e:
             print(f"Error: {e}")
             print("Note: This example requires proper embedding setup")
@@ -289,22 +289,22 @@ def chaining_example():
 def factory_example():
     """Demonstrate the factory function for creating RAG pipelines."""
     print("\n=== Factory Function Example ===")
-    
+
     # Create different types of RAG using the factory
     rag_types = ["basic", "streaming", "memory"]
-    
+
     for rag_type in rag_types:
         print(f"\nCreating {rag_type} RAG...")
         rag = create_rag(rag_type, 
                         name=f"{rag_type}_demo",
                         chunk_size=500,
                         top_k=2)
-        
+
         print(f"RAG type: {type(rag).__name__}")
         print(f"Config: {rag.config.name}")
         print(f"Streaming enabled: {rag.config.streaming_enabled}")
         print(f"Memory enabled: {rag.config.memory_enabled}")
-        
+
         # Test invoke method availability
         print(f"Has invoke() method: {hasattr(rag, 'invoke')}")
         print(f"Has batch() method: {hasattr(rag, 'batch')}")
@@ -313,7 +313,7 @@ def factory_example():
 if __name__ == "__main__":
     print("LLMBlocks RAG Examples with LangChain Runnable Compatibility")
     print("=" * 70)
-    
+
     # Note: These examples require proper setup of embeddings and API keys
     print("Note: These examples require:")
     print("- OpenAI API key set in environment variables")
@@ -325,7 +325,7 @@ if __name__ == "__main__":
     print("- .stream() method for streaming responses")
     print("- | operator support for chaining (with proper integration)")
     print("- Backward compatibility with .query() and .query_stream() methods")
-    
+
     # Run examples
     basic_rag_example()
     streaming_rag_example()
