@@ -5,6 +5,7 @@ project_structure = {
     "llmblocks": [
         "blocks",
         "core",
+        "prebuilt",
         "cli/commands",
         "playground",
         "config"
