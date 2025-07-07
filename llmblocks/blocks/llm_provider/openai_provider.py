@@ -9,7 +9,7 @@ user-friendly error messages for debugging configuration issues.
 from typing import List, Optional
 from pydantic import BaseModel, Field, validator
 from langchain.llms import OpenAI
-from .base import BaseLLMProvider
+from llmblocks.blocks.llm_provider.base import BaseLLMProvider
 
 
 class OpenAICredentials(BaseModel):

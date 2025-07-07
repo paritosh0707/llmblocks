@@ -8,8 +8,8 @@ configuration parameters. It uses a simple dictionary-based approach for provide
 from typing import Dict, Type, Any, List
 from pydantic import ValidationError
 
-from .base import BaseLLMProvider
-from .openai_provider import OpenAIProvider
+from llmblocks.blocks.llm_provider.base import BaseLLMProvider
+from llmblocks.blocks.llm_provider.openai_provider import OpenAIProvider
 
 
 # Constant dictionary of available providers (normalized to lowercase)
