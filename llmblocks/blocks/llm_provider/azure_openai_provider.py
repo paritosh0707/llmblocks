@@ -1,45 +1,45 @@
-"""
-OpenAI Provider Module
-
-This module provides a robust, Pydantic-validated wrapper around LangChain's OpenAI LLM.
-It includes comprehensive validation for all OpenAI configuration parameters and
-user-friendly error messages for debugging configuration issues.
-"""
-
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, field_validator, SecretStr
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 from llmblocks.blocks.llm_provider.base import BaseLLMProvider
 
 
-class OpenAICredentials(BaseModel):
+class AzureOpenAICredentials(BaseModel):
     """
-    Pydantic model for validating OpenAI API credentials and configuration.
+    Pydantic model for validating Azure OpenAI API credentials and configuration.
     
-    This model ensures all parameters are valid before instantiating the OpenAI LLM,
+    This model ensures all parameters are valid before instantiating the Azure OpenAI LLM,
     providing clear error messages for any validation failures.
     
     Required Fields:
-    - api_key: Your OpenAI API key (required for authentication)
+    - api_key: Your Azure OpenAI API key
+    - api_version: Azure OpenAI API version (e.g., "2023-05-15")
+    - deployment_endpoint: Azure OpenAI endpoint URL
+    - deployment_name: Name of your Azure OpenAI deployment (e.g., "gpt-4", "gpt-35-turbo")
     
     Optional Fields (with defaults):
-    - model_name: OpenAI model to use (default: "gpt-3.5-turbo")
     - temperature: Controls randomness in responses, 0.0-2.0 (default: 0.7)
     - max_tokens: Maximum tokens in response (default: None, uses model's limit)
     - n: Number of completions to generate (default: 1)
     - stop: Stop sequences to end generation (default: None)
     """
     
-    # Required field - no default value
+    # Required fields - no default values
     api_key: SecretStr = Field(
-        description="OpenAI API key for authentication (required)"
+        description="Azure OpenAI API key for authentication"
+    )
+    api_version: str = Field(
+        default="2023-05-15",
+        description="Azure OpenAI API version (e.g., '2023-05-15')"
+    )
+    deployment_endpoint: str = Field(
+        description="Azure OpenAI endpoint URL"
+    )
+    deployment_name: str = Field(
+        description="Azure OpenAI deployment name (e.g., 'gpt-4', 'gpt-35-turbo')"
     )
     
     # Optional fields with defaults
-    model_name: str = Field(
-        default="gpt-4o",
-        description="OpenAI model identifier (e.g., 'gpt-4o', 'gpt-4o-mini')"
-    )
     temperature: float = Field(
         default=0.7,
         description="Controls randomness in responses (0.0 = deterministic, 2.0 = very random)"
@@ -61,14 +61,28 @@ class OpenAICredentials(BaseModel):
     def validate_api_key(cls, v):
         """Validate that API key is non-empty."""
         if not v or not v.strip():
-            raise ValueError("OpenAI API key is required and cannot be empty")
+            raise ValueError("Azure OpenAI API key is required and cannot be empty")
         return v.strip()
     
-    @field_validator('model_name')
-    def validate_model_name(cls, v):
-        """Validate that model name is a valid OpenAI model identifier."""
+    @field_validator('api_version')
+    def validate_api_version(cls, v):
+        """Validate that API version is non-empty."""
         if not v or not v.strip():
-            raise ValueError("model_name must be a non-empty string")
+            raise ValueError("Azure OpenAI API version is required and cannot be empty")
+        return v.strip()
+    
+    @field_validator('deployment_endpoint')
+    def validate_deployment_endpoint(cls, v):
+        """Validate that Azure endpoint is non-empty."""
+        if not v or not v.strip():
+            raise ValueError("Azure OpenAI endpoint is required and cannot be empty")
+        return v.strip()
+    
+    @field_validator('deployment_name')
+    def validate_deployment_name(cls, v):
+        """Validate that deployment name is non-empty."""
+        if not v or not v.strip():
+            raise ValueError("Azure OpenAI deployment name is required and cannot be empty")
         return v.strip()
     
     @field_validator('temperature')
@@ -104,36 +118,38 @@ class OpenAICredentials(BaseModel):
         return v
 
 
-class OpenAIProvider(BaseLLMProvider):
+class AzureOpenAIProvider(BaseLLMProvider):
     """
-    A robust wrapper around LangChain's OpenAI LLM with Pydantic validation.
+    A robust wrapper around LangChain's Azure OpenAI LLM with Pydantic validation.
     
-    This class provides a clean interface for instantiating OpenAI LLMs with
+    This class provides a clean interface for instantiating Azure OpenAI LLMs with
     comprehensive parameter validation and clear error messages.
     """
     
     @property
-    def PROVIDER_NAME(self) -> Literal["openai"]:
-        return "openai"
+    def PROVIDER_NAME(self) -> Literal["azure_openai"]:
+        return "azure_openai"
     
     def __init__(self, **kwargs):
         """
-        Initialize the OpenAI provider with validated credentials.
+        Initialize the Azure OpenAI provider with validated credentials.
         
         Args:
-            **kwargs: Configuration parameters to pass to OpenAICredentials
+            **kwargs: Configuration parameters to pass to AzureOpenAICredentials
             
         Raises:
             ValueError: If validation fails or LLM instantiation fails
         """
         try:
             # Parse and validate credentials
-            self.credentials = OpenAICredentials(**kwargs)
+            self.credentials = AzureOpenAICredentials(**kwargs)
             
             # Extract validated parameters for LangChain
             llm_kwargs = {
                 'api_key': self.credentials.api_key.get_secret_value(),
-                'model': self.credentials.model_name,
+                'api_version': self.credentials.api_version,
+                'azure_endpoint': self.credentials.deployment_endpoint,
+                'azure_deployment': self.credentials.deployment_name,
                 'temperature': self.credentials.temperature,
                 'n': self.credentials.n,
             }
@@ -144,28 +160,22 @@ class OpenAIProvider(BaseLLMProvider):
             if self.credentials.stop is not None:
                 llm_kwargs['stop'] = self.credentials.stop
             
-            # Instantiate the LangChain OpenAI LLM
-            self.llm = ChatOpenAI(**llm_kwargs)
+            # Instantiate the LangChain Azure OpenAI LLM
+            self.llm = AzureChatOpenAI(**llm_kwargs)
             
         except Exception as err:
             # Re-raise with clear error message
-            raise ValueError(f"Invalid OpenAI credentials: {err}")
+            raise ValueError(f"Invalid Azure OpenAI credentials: {err}")
     
     def get_llm(self):
         """
-        Get the underlying LangChain OpenAI LLM instance.
+        Get the underlying LangChain Azure OpenAI LLM instance.
         
         Returns:
-            The LangChain OpenAI LLM instance
+            The LangChain Azure OpenAI LLM instance
         """
         return self.llm
 
 
 if __name__ == "__main__":
-    # Run examples from the separate examples module
-    # try:
-    #     from llmblocks.blocks.llm_provider.examples import run_examples
-    #     run_examples()
-    # except ImportError as e:
-    #     print(f"Could not import examples: {e}")
-    pass
+    pass 

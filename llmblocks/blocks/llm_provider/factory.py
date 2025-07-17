@@ -10,11 +10,15 @@ from pydantic import ValidationError
 
 from llmblocks.blocks.llm_provider.base import BaseLLMProvider
 from llmblocks.blocks.llm_provider.openai_provider import OpenAIProvider
+from llmblocks.blocks.llm_provider.azure_openai_provider import AzureOpenAIProvider
+from llmblocks.blocks.llm_provider.gemini_provider import GeminiProvider
 
 
 # Constant dictionary of available providers (normalized to lowercase)
 AVAILABLE_PROVIDERS: Dict[str, Type[BaseLLMProvider]] = {
     "openai": OpenAIProvider,
+    "azure_openai": AzureOpenAIProvider,
+    "gemini": GeminiProvider,
 }
 
 

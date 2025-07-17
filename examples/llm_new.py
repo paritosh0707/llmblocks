@@ -6,15 +6,34 @@ This module demonstrates how to use the LLMFactory for creating and managing
 LLM provider instances with comprehensive validation and error handling.
 """
 
+import os
+import sys
+from pathlib import Path
+
+# Add the project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 from llmblocks.blocks.llm_provider.factory import LLMFactory, AVAILABLE_PROVIDERS
-from llmblocks.blocks.llm_provider.openai_provider import OpenAIProvider
+from llmblocks.blocks.llm_provider.gemini_provider import GeminiProvider
 
 
-def run_examples():
-    """Run all LLMFactory usage examples."""
+def run_examples(kwargs):
+    """
+    Run all LLMFactory usage examples.
+    
+    Args:
+        kwargs (dict): Configuration parameters including api_key for provider creation
+    """
     
     print("🚀 LLMFactory Usage Examples")
     print("=" * 50)
+    
+    # Extract credentials from kwargs
+    api_key = kwargs.get('api_key')
+    if not api_key:
+        raise ValueError("API key is required to run examples")
     
     # Example 1: Check pre-populated providers
     print("\n📋 Example 1: Pre-populated Providers")
@@ -23,19 +42,19 @@ def run_examples():
     
     # Example 2: Check if provider is available
     print(f"\n🔍 Example 2: Provider Availability Check")
-    print(f"Is 'openai' available? {LLMFactory.is_provider_available('openai')}")
-    print(f"Is 'OPENAI' available? {LLMFactory.is_provider_available('OPENAI')}")  # Case-insensitive
+    print(f"Is 'gemini' available? {LLMFactory.is_provider_available('gemini')}")
+    print(f"Is 'GEMINI' available? {LLMFactory.is_provider_available('GEMINI')}")  # Case-insensitive
     print(f"Is 'invalid' available? {LLMFactory.is_provider_available('invalid')}")
     
     # Example 3: Creating provider with pre-registered provider
     print(f"\n🔧 Example 3: Create Provider (Pre-registered)")
     try:
         provider = LLMFactory.create_provider(
-            provider_name="openai",
-            api_key="sk-your-api-key-here",
-            model_name="gpt-4o"
+            provider_name="gemini",
+            api_key=api_key,
+            model_name="gemini-2.0-flash"
         )
-        # print(f"✅ Created {provider.PROVIDER_NAME} provider")
+        print(f"✅ Created {provider.PROVIDER_NAME} provider")
         # print(f"   Model: {provider.credentials.model_name}")
         # print(f"   Temperature: {provider.credentials.temperature}")
     except Exception as e:
@@ -44,9 +63,9 @@ def run_examples():
     # Example 4: Register additional providers using the API
     print(f"\n➕ Example 4: Register Additional Providers")
     try:
-        # Register aliases for OpenAI using the registration API
-        LLMFactory.register_provider('gpt4', OpenAIProvider)
-        LLMFactory.register_provider('custom_openai', OpenAIProvider)
+        # Register aliases for Gemini using the registration API
+        LLMFactory.register_provider('gemini_flash', GeminiProvider)
+        LLMFactory.register_provider('custom_gemini', GeminiProvider)
         
         print(f"✅ Registered providers. Now available: {list(AVAILABLE_PROVIDERS.keys())}")
     except Exception as e:
@@ -56,9 +75,9 @@ def run_examples():
     print(f"\n🔧 Example 5: Create Provider (Using Registered Alias)")
     try:
         provider = LLMFactory.create_provider(
-            provider_name="gpt4",
-            api_key="sk-your-api-key-here",
-            model_name="gpt-4"
+            provider_name="gemini",
+            api_key=api_key,
+            model_name="gemini-2.0-flash"
         )
         print(f"✅ Created provider using alias: {provider.PROVIDER_NAME}")
         # print(f"   Model: {provider.credentials.model_name}")
@@ -70,7 +89,7 @@ def run_examples():
     try:
         provider = LLMFactory.create_provider(
             provider_name="invalid-provider",
-            api_key="sk-your-api-key-here"
+            api_key=api_key
         )
         print(f"✅ Created provider: {provider.PROVIDER_NAME}")
     except Exception as e:
@@ -80,8 +99,8 @@ def run_examples():
     print(f"\n❌ Example 7: Missing Provider Name")
     try:
         provider = LLMFactory.create_provider(
-            api_key="sk-your-api-key-here",
-            model_name="gpt-4"
+            api_key=api_key,
+            model_name="gemini-2.0-flash"
         )
         print(f"✅ Created provider: {provider.PROVIDER_NAME}")
     except Exception as e:
@@ -90,7 +109,7 @@ def run_examples():
     # Example 8: Get provider class directly
     print(f"\n🔍 Example 8: Get Provider Class")
     try:
-        provider_class = LLMFactory.get_provider('openai')
+        provider_class = LLMFactory.get_provider('gemini')
         print(f"✅ Got provider class: {provider_class}")
         print(f"   Class name: {provider_class.__name__}")
     except Exception as e:
@@ -106,17 +125,17 @@ def run_examples():
     try:
         # Using provider_name key
         provider1 = LLMFactory.create_provider(
-            provider_name="openai",
-            api_key="sk-your-api-key-here",
-            model_name="gpt-4o"
+            provider_name="gemini",
+            api_key=api_key,
+            model_name="gemini-2.0-flash"
         )
         print(f"✅ Created with 'provider_name': {provider1.PROVIDER_NAME}")
         
         # Using provider key (alternative)
         provider2 = LLMFactory.create_provider(
-            provider="openai",
-            api_key="sk-your-api-key-here",
-            model_name="gpt-4o-mini"
+            provider="gemini",
+            api_key=api_key,
+            model_name="gemini-2.0-flash-lite"
         )
         print(f"✅ Created with 'provider': {provider2.PROVIDER_NAME}")
         
@@ -127,9 +146,9 @@ def run_examples():
     print(f"\n🔤 Example 11: Case-Insensitive Provider Access")
     try:
         provider = LLMFactory.create_provider(
-            provider_name="OPENAI",  # Uppercase
-            api_key="sk-your-api-key-here",
-            model_name="gpt-4o"
+            provider_name="GEMINI",  # Uppercase
+            api_key=api_key,
+            model_name="gemini-2.0-flash"
         )
         print(f"✅ Created with uppercase provider name: {provider.PROVIDER_NAME}")
     except Exception as e:
@@ -139,13 +158,29 @@ def run_examples():
     print(f"\n⚠️ Example 12: Validation Error Handling")
     try:
         provider = LLMFactory.create_provider(
-            provider_name="openai",
+            provider_name="gemini",
             api_key="",  # Invalid empty API key
-            model_name="gpt-4o"
+            model_name="gemini-2.0-flash"
         )
         print(f"✅ Created provider: {provider.PROVIDER_NAME}")
     except Exception as e:
         print(f"❌ Expected validation error: {e}")
+        print(f"   Error type: {type(e).__name__}")
+
+    # Example 13: Test LLM invocation
+    print(f"\n🤖 Example 13: Test LLM Invocation")
+    try:
+        provider = LLMFactory.create_provider(**kwargs)
+        print(f"✅ Created provider: {provider.PROVIDER_NAME}")
+        
+        llm = provider.get_llm()
+        if llm is None:
+            raise ValueError("LLM instance is None")
+            
+        response = llm.invoke("Hello, how are you?")
+        print(f"Response from LLM: {response}")
+    except Exception as e:
+        print(f"❌ Error during LLM invocation: {e}")
         print(f"   Error type: {type(e).__name__}")
     
     print(f"\n🎉 All examples completed!")
@@ -154,4 +189,19 @@ def run_examples():
 
 
 if __name__ == "__main__":
-    run_examples() 
+    print("Starting LLMFactory examples...")
+    try:
+        # Get API key from environment or user input
+        api_key = input("Please enter your Google API key: ").strip() or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("API key is required")
+            
+        kwargs = {
+            "provider_name": "gemini",
+            "api_key": api_key,
+            "model_name": "gemini-2.0-flash"
+        }
+        run_examples(kwargs)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    print("LLMFactory examples completed!")
