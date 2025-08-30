@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
 from enum import Enum
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 import asyncio
 import uuid
 
@@ -49,8 +49,8 @@ class BlockMetadata:
     version: str = "1.0.0"
     description: str = ""
     author: str = ""
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     tags: List[str] = field(default_factory=list)
     dependencies: List[str] = field(default_factory=list)
     config_schema: Dict[str, Any] = field(default_factory=dict)
@@ -186,7 +186,7 @@ class BaseBlock(ABC):
         
         try:
             self.status = BlockStatus.RUNNING
-            self._start_time = datetime.utcnow()
+            self._start_time = datetime.now(UTC)
             self.logger.info("Block started", block_id=self.metadata.block_id)
             
             # Call subclass start implementation
@@ -273,11 +273,11 @@ class BaseBlock(ABC):
             "last_error": str(self._last_error) if self._last_error else None,
             "request_count": self._request_count,
             "uptime": None,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
         
         if self._start_time:
-            health["uptime"] = (datetime.utcnow() - self._start_time).total_seconds()
+            health["uptime"] = (datetime.now(UTC) - self._start_time).total_seconds()
         
         # Call subclass health check implementation
         try:

@@ -10,7 +10,7 @@ import logging
 import json
 import os
 from typing import Any, Dict, Optional, Union
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 
 import structlog
@@ -194,7 +194,7 @@ class LLMBlocksLogger:
     def _add_context(self, **kwargs) -> Dict[str, Any]:
         """Add common context to log messages."""
         context = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "logger": self.name,
             **kwargs
         }
@@ -245,7 +245,7 @@ class LLMBlocksLogger:
     def start_timer(self, name: str) -> None:
         """Start a performance timer."""
         if self.enable_metrics:
-            self._timers[name] = datetime.utcnow().timestamp()
+            self._timers[name] = datetime.now(UTC).timestamp()
     
     def stop_timer(self, name: str) -> float:
         """Stop a performance timer and return duration."""
@@ -253,7 +253,7 @@ class LLMBlocksLogger:
             return 0.0
         
         start_time = self._timers.pop(name)
-        duration = datetime.utcnow().timestamp() - start_time
+        duration = datetime.now(UTC).timestamp() - start_time
         
         # Log the timing
         self.debug(f"Timer '{name}' completed", timer_name=name, duration=duration)

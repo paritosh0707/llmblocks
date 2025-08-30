@@ -453,7 +453,7 @@ async def get_provider(
         LLM provider instance
     """
     factory = get_factory()
-    return await factory.get_or_create_provider(provider_name, config, **kwargs)
+    return await factory.create_provider(provider_name, config, **kwargs)
 
 
 async def create_provider_with_fallback(

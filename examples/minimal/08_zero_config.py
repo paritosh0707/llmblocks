@@ -20,7 +20,9 @@ async def main():
     
     # ✨ THE MAGIC - Only 2 lines for AI!
     from llmblocks.blocks.llm_provider import get_provider
-    print(f"🤖 AI: {(await get_provider('gemini').generate('Say hello!')).content}")
+    ai = await get_provider('gemini')
+    response = await ai.generate('Say hello!')
+    print(f"🤖 AI: {response.content}")
     
     print(f"\n✅ That's it! Just 2 lines of code!")
 

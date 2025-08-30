@@ -241,14 +241,25 @@ class GeminiProvider(BaseLLMProvider):
     ) -> AsyncIterator[LLMResponse]:
         """Generate streaming response using Gemini API."""
         try:
-            # Convert messages to Gemini format
-            gemini_messages = self._messages_to_gemini_format(messages)
+            # Convert messages to LangChain format
+            langchain_messages = [msg.to_langchain_message() for msg in messages]
             
-            # Prepare generation config
-            generation_config = self._get_generation_config(**kwargs)
+            # Use LangChain streaming
+            async for chunk in self._langchain_client.astream(langchain_messages, **kwargs):
+                yield LLMResponse(
+                    content=chunk.content,
+                    model=self.gemini_config.model,
+                    provider=self.provider_name,
+                    metadata={
+                        "chunk": True,
+                        "finish_reason": getattr(chunk, 'response_metadata', {}).get('finish_reason', None)
+                    }
+                )
             
-            # Make streaming API request
-            if len(gemini_messages) == 1:
+            return  # Exit early since we're using LangChain streaming
+            
+            # Old direct API code (kept for reference but not executed)
+            if False and len(gemini_messages) == 1:
                 # Single message
                 response_stream = await asyncio.to_thread(
                     self._model.generate_content,
@@ -314,7 +325,11 @@ class GeminiProvider(BaseLLMProvider):
         if not response.generations or not response.generations[0]:
             raise LLMProviderError("Empty response from Gemini")
         
-        generation = response.generations[0][0]
+        # Handle both old and new LangChain response formats
+        if isinstance(response.generations[0], list):
+            generation = response.generations[0][0]  # Old format
+        else:
+            generation = response.generations[0]  # New format
         message = generation.message
         
         # Extract usage information from response metadata

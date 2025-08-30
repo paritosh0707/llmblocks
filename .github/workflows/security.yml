@@ -1,0 +1,275 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.1.18"
+
+jobs:
+  # Dependency Security Scan
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+
+      - name: Run Safety (dependency vulnerability scan)
+        run: |
+          uv run safety check --json --output safety-report.json
+        continue-on-error: true
+
+      - name: Run pip-audit (additional dependency scan)
+        run: |
+          uv run pip-audit --format=json --output=pip-audit-report.json
+        continue-on-error: true
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-scan-results
+          path: |
+            safety-report.json
+            pip-audit-report.json
+
+  # Code Security Scan
+  code-scan:
+    name: Code Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+
+      - name: Run Bandit (code security scan)
+        run: |
+          uv run bandit -r src/ -f json -o bandit-report.json
+        continue-on-error: true
+
+      - name: Run Semgrep (static analysis)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/python
+        continue-on-error: true
+
+      - name: Upload code scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: code-scan-results
+          path: |
+            bandit-report.json
+
+  # Container Security Scan
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t llmblocks:latest .
+        continue-on-error: true
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'llmblocks:latest'
+          format: 'sarif'
+          output: 'trivy-container-results.sarif'
+        continue-on-error: true
+
+      - name: Upload container scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-container-results.sarif'
+
+  # License Compliance
+  license-scan:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+
+      - name: Generate license report
+        run: |
+          uv run pip-licenses --format=json --output-file=license-report.json
+        continue-on-error: true
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: license-report
+          path: license-report.json
+
+  # Secret Scan
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for secret scanning
+
+      - name: Run TruffleHog (secret detection)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  # Security Summary
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-scan, license-scan, secret-scan]
+    if: always()
+    
+    steps:
+      - name: Download all scan results
+        uses: actions/download-artifact@v3
+        with:
+          path: scan-results/
+
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary" > security-summary.md
+          echo "" >> security-summary.md
+          echo "## Scan Results" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          if [ "${{ needs.dependency-scan.result }}" == "success" ]; then
+            echo "✅ Dependency Scan: PASSED" >> security-summary.md
+          else
+            echo "❌ Dependency Scan: FAILED" >> security-summary.md
+          fi
+          
+          if [ "${{ needs.code-scan.result }}" == "success" ]; then
+            echo "✅ Code Security Scan: PASSED" >> security-summary.md
+          else
+            echo "❌ Code Security Scan: FAILED" >> security-summary.md
+          fi
+          
+          if [ "${{ needs.license-scan.result }}" == "success" ]; then
+            echo "✅ License Compliance: PASSED" >> security-summary.md
+          else
+            echo "❌ License Compliance: FAILED" >> security-summary.md
+          fi
+          
+          if [ "${{ needs.secret-scan.result }}" == "success" ]; then
+            echo "✅ Secret Scan: PASSED" >> security-summary.md
+          else
+            echo "❌ Secret Scan: FAILED" >> security-summary.md
+          fi
+          
+          echo "" >> security-summary.md
+          echo "## Recommendations" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "- Review all failed scans and address issues" >> security-summary.md
+          echo "- Update dependencies regularly" >> security-summary.md
+          echo "- Follow secure coding practices" >> security-summary.md
+          echo "- Monitor for new vulnerabilities" >> security-summary.md
+          
+          cat security-summary.md
+
+      - name: Upload security summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-summary
+          path: security-summary.md
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔒 Security Scan Results\n\n${summary}`
+            });
+
+  # Notify Security Team
+  notify-security:
+    name: Notify Security Team
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-scan, secret-scan]
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Notify on security issues
+        run: |
+          echo "🚨 Security scan failed on main branch!"
+          echo "Please review the security scan results and take appropriate action."
+          # In a real environment, this would send notifications to security team
+          # via Slack, email, or other alerting systems

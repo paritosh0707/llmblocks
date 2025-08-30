@@ -13,13 +13,21 @@ from llmblocks.blocks.llm_provider.base import BaseLLMProvider, LLMProviderConfi
 class MockProvider(BaseLLMProvider):
     """Mock provider for testing factory."""
     
-    def __init__(self, config: LLMProviderConfig):
+    def __init__(self, config):
+        if isinstance(config, dict):
+            config = MockConfig(**config)
         super().__init__(config)
+    
+    async def _initialize_impl(self) -> None:
+        pass
     
     async def _initialize_clients(self) -> None:
         pass
     
-    async def _close_client(self) -> None:
+    async def _close_async_client(self) -> None:
+        pass
+    
+    async def _close_sync_client(self) -> None:
         pass
     
     async def _generate_impl(self, messages, **kwargs):
@@ -27,12 +35,14 @@ class MockProvider(BaseLLMProvider):
         return LLMResponse(content="Mock response", metadata={})
     
     async def _generate_stream_impl(self, messages, **kwargs):
-        from llmblocks.blocks.llm_provider.base import LLMStreamingResponse
-        yield LLMStreamingResponse(content="Mock", metadata={})
+        from llmblocks.blocks.llm_provider.base import LLMResponse
+        yield LLMResponse(content="Mock", metadata={})
 
 
 class MockConfig(LLMProviderConfig):
     """Mock config for testing."""
+    provider_name: str = "mock"
+    model: str = "mock-model"
     test_param: str = "default"
 
 
@@ -81,11 +91,11 @@ class TestLLMProviderFactory:
         provider = await factory.create_provider("mock", **config)
         
         assert isinstance(provider, MockProvider)
-        assert provider._config.test_param == "test_value"
+        assert provider.provider_config.test_param == "test_value"
     
     async def test_create_provider_unknown(self, factory):
         """Test creating unknown provider."""
-        with pytest.raises(ValueError, match="Unknown provider type: unknown"):
+        with pytest.raises(Exception, match="Provider 'unknown' not available"):
             await factory.create_provider("unknown")
     
     async def test_create_provider_with_api_key(self, factory):
@@ -141,7 +151,7 @@ class TestLLMProviderFactory:
         
         # Valid config
         provider = await factory.create_provider("mock", test_param="valid")
-        assert provider._config.test_param == "valid"
+        assert provider.provider_config.test_param == "valid"
     
     def test_factory_singleton_behavior(self):
         """Test that factory behaves consistently."""
@@ -187,8 +197,8 @@ class TestFactoryIntegration:
         p1 = await factory.create_provider("provider1", test_param="value1")
         p2 = await factory.create_provider("provider2", test_param="value2")
         
-        assert p1._config.test_param == "value1"
-        assert p2._config.test_param == "value2"
+        assert p1.provider_config.test_param == "value1"
+        assert p2.provider_config.test_param == "value2"
         assert p1.block_id != p2.block_id  # Different instances
     
     async def test_provider_lifecycle_through_factory(self, factory):
@@ -205,45 +215,46 @@ class TestFactoryIntegration:
         assert response.content == "Mock response"
         
         # Cleanup
-        await provider.close()
+        await provider._cleanup_impl()
 
 
 # Test the convenience function
 class TestGetProvider:
     """Test the get_provider convenience function."""
     
-    @patch('llmblocks.blocks.llm_provider.factory.LLMProviderFactory')
-    async def test_get_provider_function(self, mock_factory_class):
+    @patch('llmblocks.blocks.llm_provider.factory.get_factory')
+    async def test_get_provider_function(self, mock_get_factory):
         """Test the get_provider convenience function."""
         from llmblocks.blocks.llm_provider import get_provider
         
         # Mock the factory instance and its methods
-        mock_factory = MagicMock()
+        mock_factory = AsyncMock()
         mock_provider = AsyncMock()
         mock_factory.create_provider.return_value = mock_provider
-        mock_factory_class.return_value = mock_factory
+        mock_get_factory.return_value = mock_factory
         
         # Call get_provider
         result = await get_provider("test_provider", param="value")
         
         # Verify factory was called correctly
-        mock_factory.create_provider.assert_called_once_with("test_provider", param="value")
+        mock_factory.create_provider.assert_called_once_with("test_provider", None, param="value")
         assert result == mock_provider
     
-    @patch('llmblocks.blocks.llm_provider.factory.LLMProviderFactory')
-    async def test_get_provider_with_api_key(self, mock_factory_class):
+    @patch('llmblocks.blocks.llm_provider.factory.get_factory')
+    async def test_get_provider_with_api_key(self, mock_get_factory):
         """Test get_provider with API key."""
         from llmblocks.blocks.llm_provider import get_provider
         
-        mock_factory = MagicMock()
+        mock_factory = AsyncMock()
         mock_provider = AsyncMock()
         mock_factory.create_provider.return_value = mock_provider
-        mock_factory_class.return_value = mock_factory
+        mock_get_factory.return_value = mock_factory
         
         await get_provider("openai", api_key="test-key", model="gpt-4")
         
         mock_factory.create_provider.assert_called_once_with(
-            "openai", 
-            api_key="test-key", 
+            "openai",
+            None,
+            api_key="test-key",
             model="gpt-4"
         )

@@ -1,0 +1,220 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.1.18"
+
+jobs:
+  # Create GitHub Release
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: LLMBlocks v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## What's New in v${{ steps.get_version.outputs.VERSION }}
+            
+            🚀 **LLMBlocks - The Dream of 3-Line Stateful AI**
+            
+            ### ✨ Key Features
+            - **3-Line Stateful AI**: Create powerful AI assistants with minimal code
+            - **Memory Management**: Automatic conversation memory with multiple backends
+            - **LangChain Compatible**: Drop-in replacement for LangChain memory systems
+            - **Production Ready**: Enterprise-grade performance and reliability
+            
+            ### 🔧 Installation
+            ```bash
+            pip install llmblocks==${{ steps.get_version.outputs.VERSION }}
+            ```
+            
+            ### 🎯 Quick Start
+            ```python
+            # The dream: 3-line stateful AI!
+            ai = await get_stateful_ai("gemini", api_key="your-key")
+            response1 = await ai.chat("Hi! I'm Alice.")
+            response2 = await ai.chat("What's my name?")  # AI remembers: "Alice"!
+            ```
+            
+            ### 📚 Documentation
+            - [Full Documentation](https://llmblocks.dev)
+            - [Examples](https://github.com/llmblocks/llmblocks/tree/main/examples)
+            - [API Reference](https://llmblocks.dev/api)
+            
+            ### 🐛 Bug Reports
+            Found a bug? [Report it here](https://github.com/llmblocks/llmblocks/issues)
+            
+            ---
+            **Full Changelog**: https://github.com/llmblocks/llmblocks/compare/v${{ steps.get_version.outputs.VERSION }}...main
+          draft: false
+          prerelease: false
+
+  # Build and Upload Assets
+  build-assets:
+    name: Build Release Assets
+    runs-on: ubuntu-latest
+    needs: create-release
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+
+      - name: Build package
+        run: |
+          uv run python -m build
+
+      - name: Create source archive
+        run: |
+          git archive --format=tar.gz --prefix=llmblocks-${GITHUB_REF#refs/tags/v}/ HEAD > llmblocks-${GITHUB_REF#refs/tags/v}-source.tar.gz
+
+      - name: Upload wheel
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./dist/llmblocks-*.whl
+          asset_name: llmblocks-${{ github.ref_name }}-py3-none-any.whl
+          asset_content_type: application/zip
+
+      - name: Upload source distribution
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./dist/llmblocks-*.tar.gz
+          asset_name: llmblocks-${{ github.ref_name }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload source archive
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./llmblocks-*-source.tar.gz
+          asset_name: llmblocks-${{ github.ref_name }}-source.tar.gz
+          asset_content_type: application/gzip
+
+  # Publish to PyPI
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [create-release, build-assets]
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+
+      - name: Build package
+        run: |
+          uv run python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  # Update Documentation
+  update-docs:
+    name: Update Documentation
+    runs-on: ubuntu-latest
+    needs: publish-pypi
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra docs
+
+      - name: Build documentation
+        run: |
+          uv run mkdocs build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          cname: llmblocks.dev
+
+  # Notify Success
+  notify-success:
+    name: Notify Release Success
+    runs-on: ubuntu-latest
+    needs: [create-release, build-assets, publish-pypi, update-docs]
+    
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Notify success
+        run: |
+          echo "🎉 LLMBlocks v${{ steps.get_version.outputs.VERSION }} released successfully!"
+          echo "📦 Package: https://pypi.org/project/llmblocks/${{ steps.get_version.outputs.VERSION }}/"
+          echo "📚 Docs: https://llmblocks.dev"
+          echo "🚀 GitHub: https://github.com/llmblocks/llmblocks/releases/tag/v${{ steps.get_version.outputs.VERSION }}"

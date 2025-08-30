@@ -17,6 +17,15 @@ from .openai_provider import OpenAIProvider
 from .gemini_provider import GeminiProvider
 from .anthropic_provider import AnthropicProvider
 
+# Memory-enhanced providers
+from .memory_enhanced import (
+    MemoryEnhancedLLMProvider,
+    get_stateful_ai,
+    get_persistent_ai,
+    create_stateful_ai,
+    create_persistent_ai
+)
+
 __all__ = [
     # Base classes
     "BaseLLMProvider",
@@ -36,4 +45,11 @@ __all__ = [
     "OpenAIProvider",
     "GeminiProvider", 
     "AnthropicProvider",
+    
+    # Memory-enhanced providers
+    "MemoryEnhancedLLMProvider",
+    "get_stateful_ai",
+    "get_persistent_ai",
+    "create_stateful_ai",
+    "create_persistent_ai",
 ]
