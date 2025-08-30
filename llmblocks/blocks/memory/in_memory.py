@@ -1,5 +1,8 @@
 from typing import List, Dict, Any
 from llmblocks.blocks.memory.base import BaseMemoryProvider
+from langgraph.checkpoint.memory import MemorySaver
+
+memory_saver = MemorySaver()
 
 class InMemoryProvider(BaseMemoryProvider):
     def _initialize(self, **kwargs) -> None:

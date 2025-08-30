@@ -48,7 +48,7 @@ class Chatbot:
         messages = self.memory.get_messages()
         
         # Get response from model
-        response = self._chatbot.app.invoke({"messages": messages})
+        response = self._chatbot.app.invoke({"messages": message}, config={"checkpointer": self.session_id})
         
         # Extract the last message (model's response)
         response_message = response['messages'][-1]
