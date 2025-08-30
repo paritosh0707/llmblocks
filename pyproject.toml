@@ -35,11 +35,12 @@ dependencies = [
     "aiofiles>=23.2.1",
     
     # LLM and AI frameworks
-    "langchain>=0.1.0",
-    "langchain-openai>=0.0.5",
-    "langchain-anthropic>=0.1.0",
-    "langchain-google-genai>=0.0.6",
-    "langgraph>=0.0.20",
+    "langchain>=0.3.26",
+    "langchain-core>=0.3.75", 
+    "langchain-openai>=0.3.32",
+    "langchain-anthropic>=0.3.19",
+    "langchain-google-genai>=2.1.10",
+    "langgraph>=0.6.6",
     
     # Vector databases and embeddings
     "chromadb>=0.4.22",

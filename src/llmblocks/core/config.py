@@ -94,6 +94,7 @@ class LLMBlocksConfig(BaseSettings):
     class Config:
         env_prefix = "LLMBLOCKS_"
         case_sensitive = False
+        extra = "allow"
 
 
 class ConfigManager:
@@ -300,7 +301,7 @@ class ConfigManager:
                 loaded_at=datetime.utcnow(),
                 is_valid=False,
                 error_message=str(e)
-            )
+            ))
             
             return False
     

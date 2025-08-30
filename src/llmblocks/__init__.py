@@ -13,10 +13,10 @@ from .core.base_block import BaseBlock
 from .core.registry import BlockRegistry
 from .core.config import ConfigManager
 
-# Component exports
-from .components.chatbot import Chatbot
-from .components.rag import RAGSystem
-from .components.agent import MultiToolAgent
+# Component exports (will be added in future phases)
+# from .components.chatbot import Chatbot
+# from .components.rag import RAGSystem
+# from .components.agent import MultiToolAgent
 
 # Utility exports
 from .utils.logging import get_logger
@@ -28,10 +28,10 @@ __all__ = [
     "BlockRegistry", 
     "ConfigManager",
     
-    # Components
-    "Chatbot",
-    "RAGSystem",
-    "MultiToolAgent",
+    # Components (will be added in future phases)
+    # "Chatbot",
+    # "RAGSystem",
+    # "MultiToolAgent",
     
     # Utilities
     "get_logger",

@@ -1,1 +1,0 @@
-# Block registry if needed

@@ -208,7 +208,7 @@ class LLMProviderFactory:
             
             self.logger.info(
                 f"Created provider instance: {provider_name}",
-                provider_id=provider.metadata.block_id
+                provider_id=provider.block_id
             )
             
             return provider

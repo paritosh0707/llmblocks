@@ -35,6 +35,43 @@ from .config import (
     set_config_value
 )
 
+from .utils import (
+    generate_id,
+    get_timestamp,
+    format_timestamp,
+    hash_dict,
+    load_yaml_file,
+    save_yaml_file,
+    load_json_file,
+    save_json_file,
+    merge_dicts,
+    flatten_dict,
+    unflatten_dict,
+    safe_get,
+    safe_set,
+    retry_async,
+    measure_time,
+    validate_url,
+    sanitize_filename,
+    chunk_list,
+    deep_merge
+)
+
+from .tracing import (
+    TraceLevel,
+    TraceEvent,
+    TraceCollector,
+    get_tracer,
+    set_tracer,
+    trace_span,
+    trace_async_span,
+    trace_function,
+    trace_event,
+    trace_error,
+    trace_llm_call,
+    trace_block_lifecycle
+)
+
 __all__ = [
     # Base block system
     "BaseBlock",
@@ -59,4 +96,39 @@ __all__ = [
     "load_config_from_file",
     "get_config_value",
     "set_config_value",
+    
+    # Utilities
+    "generate_id",
+    "get_timestamp",
+    "format_timestamp",
+    "hash_dict",
+    "load_yaml_file",
+    "save_yaml_file",
+    "load_json_file",
+    "save_json_file",
+    "merge_dicts",
+    "flatten_dict",
+    "unflatten_dict",
+    "safe_get",
+    "safe_set",
+    "retry_async",
+    "measure_time",
+    "validate_url",
+    "sanitize_filename",
+    "chunk_list",
+    "deep_merge",
+    
+    # Tracing
+    "TraceLevel",
+    "TraceEvent",
+    "TraceCollector",
+    "get_tracer",
+    "set_tracer",
+    "trace_span",
+    "trace_async_span",
+    "trace_function",
+    "trace_event",
+    "trace_error",
+    "trace_llm_call",
+    "trace_block_lifecycle",
 ]

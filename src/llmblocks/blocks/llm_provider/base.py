@@ -31,11 +31,11 @@ from langchain_core.callbacks import CallbackManagerForLLMRun, AsyncCallbackMana
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 
-# LangGraph imports
-from langgraph.graph import StateGraph, MessagesState
-from langgraph.checkpoint.memory import MemorySaver
+# LangGraph imports (optional - will be imported when needed)
+# from langgraph.graph import StateGraph, MessagesState
+# from langgraph.checkpoint.memory import MemorySaver
 
-from ...core.base_block import BaseBlock, BlockType, BlockConfig
+from ...core.base_block import BlockType, BlockConfig, BlockStatus, BlockMetadata
 from ...utils.logging import get_logger, log_performance
 from ...utils.exceptions import (
     LLMProviderError,
@@ -176,7 +176,7 @@ class LLMProviderConfig(BlockConfig):
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
 
 
-class BaseLLMProvider(BaseBlock, BaseChatModel):
+class BaseLLMProvider(BaseChatModel):
     """
     Base class for all LLM providers - extends LangChain's BaseChatModel.
     
@@ -206,10 +206,28 @@ class BaseLLMProvider(BaseBlock, BaseChatModel):
             config_dict.update(kwargs)
             config = LLMProviderConfig(**config_dict)
         
-        super().__init__(config)
+        # Initialize LangChain BaseChatModel
+        super().__init__()
         
-        self.provider_config = config
-        self.logger = get_logger(f"{self.__class__.__name__}")
+        self._provider_config = config
+        self._logger = get_logger(f"{self.__class__.__name__}")
+        
+        # BaseBlock-like attributes (stored as private to avoid Pydantic conflicts)
+        self._block_id = str(uuid.uuid4())
+        self._block_type = BlockType.LLM_PROVIDER
+        self._status = BlockStatus.UNINITIALIZED
+        self._created_at = datetime.utcnow()
+        self._updated_at = self._created_at
+        
+        # Initialize metadata as a regular dict attribute for LangChain compatibility
+        self.metadata = {
+            "block_id": self._block_id,
+            "provider": self.provider_name,
+            "model": self.model_name,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
+        }
         
         # Connection management
         self._client = None
@@ -227,10 +245,121 @@ class BaseLLMProvider(BaseBlock, BaseChatModel):
         self._total_errors = 0
         self._average_response_time = 0.0
     
+    # BaseBlock-like properties
+    @property
+    def block_id(self) -> str:
+        """Get the block ID."""
+        return self._block_id
+    
     @property
     def block_type(self) -> BlockType:
         """Get the block type."""
-        return BlockType.LLM_PROVIDER
+        return self._block_type
+    
+    @property
+    def status(self) -> BlockStatus:
+        """Get the current status."""
+        return self._status
+    
+    @status.setter
+    def status(self, value: BlockStatus) -> None:
+        """Set the current status."""
+        self._status = value
+        self._updated_at = datetime.utcnow()
+        # Update metadata dict
+        if hasattr(self, 'metadata'):
+            self.update_metadata()
+    
+    @property
+    def created_at(self) -> datetime:
+        """Get the creation timestamp."""
+        return self._created_at
+    
+    @property
+    def updated_at(self) -> datetime:
+        """Get the last update timestamp."""
+        return self._updated_at
+    
+    @property
+    def provider_config(self) -> LLMProviderConfig:
+        """Get the provider configuration."""
+        return self._provider_config
+    
+    @property
+    def logger(self):
+        """Get the logger instance."""
+        return self._logger
+    
+    def update_metadata(self) -> None:
+        """Update the metadata dict with current values."""
+        self.metadata.update({
+            "status": self.status.value,
+            "updated_at": self.updated_at.isoformat()
+        })
+    
+    @property
+    def is_ready(self) -> bool:
+        """Check if the provider is ready for use."""
+        return self.status in [BlockStatus.READY, BlockStatus.RUNNING]
+    
+    # BaseBlock-like lifecycle methods
+    async def initialize(self) -> None:
+        """Initialize the provider."""
+        try:
+            self.status = BlockStatus.INITIALIZING
+            await self._initialize_clients()
+            self.status = BlockStatus.READY
+            self.logger.info("Provider initialized successfully")
+        except Exception as e:
+            self.status = BlockStatus.ERROR
+            self.logger.error(f"Provider initialization failed: {e}")
+            raise
+    
+    async def start(self) -> None:
+        """Start the provider (if not already running)."""
+        if self.status == BlockStatus.READY:
+            self.status = BlockStatus.RUNNING
+            self.logger.info("Provider started")
+    
+    async def stop(self) -> None:
+        """Stop the provider."""
+        if self.status == BlockStatus.RUNNING:
+            self.status = BlockStatus.STOPPING
+            await self.cleanup()
+            self.status = BlockStatus.STOPPED
+            self.logger.info("Provider stopped")
+    
+    async def cleanup(self) -> None:
+        """Clean up resources."""
+        try:
+            await self._close_async_client()
+            self._close_sync_client()
+            self.logger.info("Provider cleanup completed")
+        except Exception as e:
+            self.logger.error(f"Provider cleanup failed: {e}")
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Perform health check."""
+        try:
+            if hasattr(self, '_test_connection'):
+                await self._test_connection()
+            
+            return {
+                "is_healthy": True,
+                "status": self.status.value,
+                "provider": self.provider_name,
+                "model": self.model_name,
+                "total_requests": self._total_requests,
+                "total_errors": self._total_errors,
+                "uptime": (datetime.utcnow() - self.created_at).total_seconds()
+            }
+        except Exception as e:
+            return {
+                "is_healthy": False,
+                "status": self.status.value,
+                "error": str(e),
+                "provider": self.provider_name
+            }
     
     @property
     def provider_name(self) -> str:
@@ -397,7 +526,9 @@ class BaseLLMProvider(BaseBlock, BaseChatModel):
             }
         )
         
-        return ChatResult(generations=[[ai_message]])
+        from langchain_core.outputs import ChatGeneration
+        chat_generation = ChatGeneration(message=ai_message)
+        return ChatResult(generations=[chat_generation])
     
     def get_langchain_runnable(self) -> Runnable:
         """Get a LangChain Runnable interface for this provider."""
@@ -405,19 +536,81 @@ class BaseLLMProvider(BaseBlock, BaseChatModel):
     
     def create_langgraph_node(self, node_name: str = "llm") -> Callable:
         """Create a LangGraph node function for this provider."""
-        async def llm_node(state: MessagesState) -> Dict[str, List[BaseMessage]]:
+        from ...utils.langgraph_compat import warn_about_compatibility
+        
+        # Issue compatibility warnings if needed
+        warn_about_compatibility()
+        
+        # Use MRO-safe approach that avoids importing MessagesState directly
+        # This bypasses the known MRO conflict in certain LangGraph versions
+        
+        async def llm_node(state) -> Dict[str, Any]:
             """LangGraph node that processes messages using this LLM provider."""
-            messages = state.get("messages", [])
+            self.logger.debug(f"LangGraph node '{node_name}' processing state: {type(state)}")
+            
+            # Handle different state formats (dict, MessagesState, or custom objects)
+            if hasattr(state, 'get') and callable(getattr(state, 'get')):
+                # Dict-like state
+                messages = state.get("messages", [])
+            elif hasattr(state, 'messages'):
+                # MessagesState-like object
+                messages = state.messages
+            else:
+                # Fallback: assume it's iterable or has messages attribute
+                try:
+                    messages = list(state) if hasattr(state, '__iter__') else []
+                except (TypeError, AttributeError):
+                    messages = []
+            
             if not messages:
+                self.logger.debug(f"No messages found in state, returning empty")
                 return {"messages": []}
             
-            # Generate response
+            self.logger.debug(f"Processing {len(messages)} messages")
+            
+            # Generate response using our provider
             result = await self._agenerate(messages)
             
             # Return the new message
-            return {"messages": result.generations[0]}
+            new_message = result.generations[0].message
+            self.logger.debug(f"Generated response: {new_message.content[:100]}...")
+            
+            return {"messages": [new_message]}
+        
+        # Set the function name for debugging
+        llm_node.__name__ = node_name
         
         return llm_node
+    
+    def create_langgraph_graph(self, node_name: str = "llm"):
+        """Create a complete LangGraph graph with this provider."""
+        from ...utils.langgraph_compat import create_compatible_graph
+        
+        llm_node = self.create_langgraph_node(node_name)
+        success, graph, error = create_compatible_graph(llm_node, node_name)
+        
+        if success:
+            self.logger.info(f"Created LangGraph graph with node '{node_name}'")
+        else:
+            self.logger.warning(f"Using fallback graph implementation: {error}")
+        
+        return graph
+    
+    # Abstract methods that providers must implement
+    @abstractmethod
+    async def _initialize_clients(self) -> None:
+        """Initialize provider-specific clients."""
+        pass
+    
+    @abstractmethod
+    async def _close_async_client(self) -> None:
+        """Close asynchronous client."""
+        pass
+    
+    @abstractmethod
+    def _close_sync_client(self) -> None:
+        """Close synchronous client."""
+        pass
     
     # Main API methods (our custom interface)
     
@@ -702,45 +895,7 @@ class BaseLLMProvider(BaseBlock, BaseChatModel):
         # Remove None values
         return {k: v for k, v in params.items() if v is not None}
     
-    # Abstract methods that subclasses must implement
-    
-    @abstractmethod
-    async def _initialize_clients(self) -> None:
-        """Initialize provider-specific clients."""
-        pass
-    
-    @abstractmethod
-    async def _close_client(self) -> None:
-        """Close synchronous client."""
-        pass
-    
-    @abstractmethod
-    async def _close_async_client(self) -> None:
-        """Close asynchronous client."""
-        pass
-    
-    @abstractmethod
-    async def _test_connection(self) -> None:
-        """Test connection to the provider."""
-        pass
-    
-    @abstractmethod
-    async def _generate_impl(
-        self,
-        messages: List[LLMMessage],
-        **kwargs
-    ) -> LLMResponse:
-        """Provider-specific generation implementation."""
-        pass
-    
-    @abstractmethod
-    async def _generate_stream_impl(
-        self,
-        messages: List[LLMMessage],
-        **kwargs
-    ) -> AsyncIterator[LLMResponse]:
-        """Provider-specific streaming generation implementation."""
-        pass
+
     
     # Utility methods
     

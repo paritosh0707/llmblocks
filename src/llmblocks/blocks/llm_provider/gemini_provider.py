@@ -11,8 +11,9 @@ import json
 import uuid
 
 from pydantic import Field, SecretStr, validator
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatResult
 
 from .base import (
     BaseLLMProvider,
@@ -88,80 +89,103 @@ class GeminiProvider(BaseLLMProvider):
         
         super().__init__(config)
         
-        self.gemini_config = config
-        self.logger = get_logger("GeminiProvider")
+        self._gemini_config = config
         
-        # Gemini model
-        self._model = None
+        # LangChain Gemini client
+        self._langchain_client: Optional[ChatGoogleGenerativeAI] = None
+    
+    @property
+    def gemini_config(self) -> GeminiProviderConfig:
+        """Get the Gemini configuration."""
+        return self._gemini_config
     
     async def _initialize_clients(self) -> None:
-        """Initialize Gemini client."""
+        """Initialize LangChain Gemini client."""
         try:
             # Get API key
             api_key = self.gemini_config.api_key
             if isinstance(api_key, SecretStr):
                 api_key = api_key.get_secret_value()
             
-            # Configure Gemini
-            genai.configure(api_key=api_key)
+            # Client configuration for LangChain ChatGoogleGenerativeAI
+            client_config = {
+                "model": self.gemini_config.model,
+                "google_api_key": api_key,
+                "temperature": self.gemini_config.temperature,
+                "top_p": self.gemini_config.top_p,
+                "convert_system_message_to_human": True,  # Handle system messages
+            }
             
-            # Initialize model
-            generation_config = self._get_generation_config()
-            safety_settings = self._get_safety_settings()
+            # Add max_tokens if specified
+            if self.gemini_config.max_tokens:
+                client_config["max_output_tokens"] = self.gemini_config.max_tokens
             
-            self._model = genai.GenerativeModel(
-                model_name=self.gemini_config.model,
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            # Add top_k if specified
+            if self.gemini_config.top_k:
+                client_config["top_k"] = self.gemini_config.top_k
+            
+            # Initialize LangChain client
+            self._langchain_client = ChatGoogleGenerativeAI(**client_config)
             
             self.logger.info(
-                "Gemini client initialized",
+                "LangChain Gemini client initialized",
                 model=self.gemini_config.model
             )
             
         except Exception as e:
-            self.logger.error(f"Failed to initialize Gemini client: {e}")
+            self.logger.error(f"Failed to initialize LangChain Gemini client: {e}")
             raise LLMConnectionError(
-                f"Failed to initialize Gemini client: {e}",
+                f"Failed to initialize LangChain Gemini client: {e}",
                 error_code=ErrorCodes.LLM_CONNECTION_FAILED
             ) from e
     
-    async def _close_client(self) -> None:
+
+    
+    def _close_sync_client(self) -> None:
         """Close synchronous client."""
-        # Gemini client doesn't need explicit closing
-        self._model = None
+        if self._langchain_client:
+            # LangChain client doesn't need explicit closing
+            self._langchain_client = None
+    
+    async def _close_client(self) -> None:
+        """Close synchronous client (async version for compatibility)."""
+        self._close_sync_client()
     
     async def _close_async_client(self) -> None:
         """Close asynchronous client."""
-        # Gemini client doesn't need explicit closing
-        self._model = None
+        # LangChain client doesn't need explicit closing
+        pass
     
     async def _test_connection(self) -> None:
-        """Test connection to Gemini API."""
+        """Test connection to Gemini API using LangChain client."""
         try:
-            # Make a simple test request
-            response = await asyncio.to_thread(
-                self._model.generate_content,
-                "Hello",
-                generation_config=genai.types.GenerationConfig(max_output_tokens=5)
-            )
+            from langchain_core.messages import HumanMessage
             
-            if not response.text:
+            # Make a simple test request using LangChain
+            test_messages = [HumanMessage(content="Hello")]
+            response = await self._langchain_client.agenerate([test_messages])
+            
+            if not response.generations or not response.generations[0]:
                 raise LLMConnectionError("Empty response from Gemini API")
             
             self.logger.info("Gemini connection test successful")
             
         except Exception as e:
-            if "API_KEY" in str(e).upper():
+            error_msg = str(e).lower()
+            if "api key" in error_msg or "auth" in error_msg:
                 raise LLMAuthenticationError(
                     f"Gemini authentication failed: {e}",
                     error_code=ErrorCodes.LLM_AUTH_FAILED
                 ) from e
-            elif "QUOTA" in str(e).upper() or "RATE" in str(e).upper():
+            elif "quota" in error_msg or "rate" in error_msg:
                 raise LLMRateLimitError(
                     f"Gemini rate limit exceeded: {e}",
                     error_code=ErrorCodes.LLM_RATE_LIMIT
+                ) from e
+            elif "timeout" in error_msg:
+                raise LLMTimeoutError(
+                    f"Gemini request timeout: {e}",
+                    error_code=ErrorCodes.LLM_TIMEOUT
                 ) from e
             else:
                 raise LLMConnectionError(
@@ -174,46 +198,30 @@ class GeminiProvider(BaseLLMProvider):
         messages: List[LLMMessage],
         **kwargs
     ) -> LLMResponse:
-        """Generate response using Gemini API."""
+        """Generate response using LangChain Gemini client."""
         try:
-            # Convert messages to Gemini format
-            gemini_messages = self._messages_to_gemini_format(messages)
+            # Convert messages to LangChain format
+            langchain_messages = [msg.to_langchain_message() for msg in messages]
             
-            # Prepare generation config
-            generation_config = self._get_generation_config(**kwargs)
+            # Use LangChain client
+            response = await self._langchain_client.agenerate([langchain_messages])
             
-            # Make API request
-            if len(gemini_messages) == 1:
-                # Single message
-                response = await asyncio.to_thread(
-                    self._model.generate_content,
-                    gemini_messages[0],
-                    generation_config=generation_config
-                )
-            else:
-                # Multi-turn conversation
-                chat = self._model.start_chat(history=gemini_messages[:-1])
-                response = await asyncio.to_thread(
-                    chat.send_message,
-                    gemini_messages[-1],
-                    generation_config=generation_config
-                )
-            
-            # Convert response
-            return self._gemini_response_to_llm_response(response)
+            # Convert response to our format
+            return self._langchain_response_to_llm_response(response)
             
         except Exception as e:
-            if "API_KEY" in str(e).upper():
+            error_msg = str(e).lower()
+            if "api key" in error_msg or "auth" in error_msg:
                 raise LLMAuthenticationError(
                     f"Gemini authentication failed: {e}",
                     error_code=ErrorCodes.LLM_AUTH_FAILED
                 ) from e
-            elif "QUOTA" in str(e).upper() or "RATE" in str(e).upper():
+            elif "quota" in error_msg or "rate" in error_msg:
                 raise LLMRateLimitError(
                     f"Gemini rate limit exceeded: {e}",
                     error_code=ErrorCodes.LLM_RATE_LIMIT
                 ) from e
-            elif "TIMEOUT" in str(e).upper():
+            elif "timeout" in error_msg:
                 raise LLMTimeoutError(
                     f"Gemini request timeout: {e}",
                     error_code=ErrorCodes.LLM_TIMEOUT
@@ -295,110 +303,43 @@ class GeminiProvider(BaseLLMProvider):
             self.logger.error(f"Gemini streaming failed: {e}")
             raise LLMProviderError(f"Gemini streaming failed: {e}") from e
     
-    def _messages_to_gemini_format(self, messages: List[LLMMessage]) -> List[str]:
-        """Convert LLMMessage objects to Gemini format."""
-        gemini_messages = []
-        
-        for message in messages:
-            if message.role == LLMRole.SYSTEM:
-                # Gemini doesn't have explicit system role, prepend to first user message
-                if gemini_messages:
-                    gemini_messages[0] = f"System: {message.content}\n\n{gemini_messages[0]}"
-                else:
-                    gemini_messages.append(f"System: {message.content}")
-            elif message.role == LLMRole.USER:
-                gemini_messages.append(message.content)
-            elif message.role == LLMRole.ASSISTANT:
-                # For multi-turn conversations, we need to handle assistant messages
-                gemini_messages.append(message.content)
-        
-        return gemini_messages
+
     
-    def _get_generation_config(self, **kwargs) -> genai.types.GenerationConfig:
-        """Get generation configuration for Gemini."""
-        config_params = {
-            "temperature": kwargs.get("temperature", self.gemini_config.temperature),
-            "top_p": kwargs.get("top_p", self.gemini_config.top_p),
-            "candidate_count": kwargs.get("candidate_count", self.gemini_config.candidate_count),
-        }
-        
-        # Add max_tokens if specified
-        max_tokens = kwargs.get("max_tokens", self.gemini_config.max_tokens)
-        if max_tokens:
-            config_params["max_output_tokens"] = max_tokens
-        
-        # Add top_k if specified
-        top_k = kwargs.get("top_k", self.gemini_config.top_k)
-        if top_k:
-            config_params["top_k"] = top_k
-        
-        # Add stop sequences if specified
-        stop = kwargs.get("stop", self.gemini_config.stop)
-        if stop:
-            config_params["stop_sequences"] = stop
-        
-        return genai.types.GenerationConfig(**config_params)
+
     
-    def _get_safety_settings(self) -> Optional[Dict[HarmCategory, HarmBlockThreshold]]:
-        """Get safety settings for Gemini."""
-        if not self.gemini_config.safety_settings:
-            return None
-        
-        safety_settings = {}
-        
-        # Map string settings to Gemini enums
-        harm_categories = {
-            "harassment": HarmCategory.HARM_CATEGORY_HARASSMENT,
-            "hate_speech": HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-            "sexually_explicit": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-            "dangerous_content": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        }
-        
-        thresholds = {
-            "block_none": HarmBlockThreshold.BLOCK_NONE,
-            "block_low_and_above": HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-            "block_medium_and_above": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            "block_only_high": HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        }
-        
-        for category_str, threshold_str in self.gemini_config.safety_settings.items():
-            if category_str in harm_categories and threshold_str in thresholds:
-                safety_settings[harm_categories[category_str]] = thresholds[threshold_str]
-        
-        return safety_settings if safety_settings else None
-    
-    def _gemini_response_to_llm_response(self, response: Any) -> LLMResponse:
-        """Convert Gemini response to LLMResponse."""
-        if not response.text:
+    def _langchain_response_to_llm_response(self, response: ChatResult) -> LLMResponse:
+        """Convert LangChain response to LLMResponse."""
+        if not response.generations or not response.generations[0]:
             raise LLMProviderError("Empty response from Gemini")
         
-        # Extract usage information if available
-        usage = None
-        if hasattr(response, 'usage_metadata') and response.usage_metadata:
-            usage = {
-                "prompt_tokens": getattr(response.usage_metadata, 'prompt_token_count', 0),
-                "completion_tokens": getattr(response.usage_metadata, 'candidates_token_count', 0),
-                "total_tokens": getattr(response.usage_metadata, 'total_token_count', 0)
-            }
+        generation = response.generations[0][0]
+        message = generation.message
         
-        # Determine finish reason
-        finish_reason = "stop"
-        if hasattr(response, 'candidates') and response.candidates:
-            candidate = response.candidates[0]
-            if hasattr(candidate, 'finish_reason'):
-                finish_reason = str(candidate.finish_reason).lower()
+        # Extract usage information from response metadata
+        usage = None
+        if hasattr(response, 'llm_output') and response.llm_output:
+            token_usage = response.llm_output.get('token_usage', {})
+            if token_usage:
+                usage = {
+                    "prompt_tokens": token_usage.get('prompt_tokens', 0),
+                    "completion_tokens": token_usage.get('completion_tokens', 0),
+                    "total_tokens": token_usage.get('total_tokens', 0)
+                }
+        
+        # Extract additional kwargs
+        additional_kwargs = getattr(message, 'additional_kwargs', {})
         
         return LLMResponse(
-            content=response.text,
+            content=message.content or "",
             role=LLMRole.ASSISTANT,
-            finish_reason=finish_reason,
+            finish_reason=additional_kwargs.get('finish_reason', 'stop'),
             usage=usage,
             model=self.gemini_config.model,
             provider=self.provider_name,
-            request_id=str(uuid.uuid4()),
+            request_id=additional_kwargs.get('request_id', str(uuid.uuid4())),
             metadata={
-                "safety_ratings": getattr(response, 'safety_ratings', None),
-                "prompt_feedback": getattr(response, 'prompt_feedback', None)
+                "langchain_generation_info": getattr(generation, 'generation_info', {}),
+                **additional_kwargs
             }
         )
     
@@ -407,16 +348,15 @@ class GeminiProvider(BaseLLMProvider):
         health = await super()._health_check_impl()
         
         try:
+            from langchain_core.messages import HumanMessage
+            
             # Test API connectivity
-            response = await asyncio.to_thread(
-                self._model.generate_content,
-                "Health check",
-                generation_config=genai.types.GenerationConfig(max_output_tokens=1)
-            )
+            test_messages = [HumanMessage(content="Health check")]
+            response = await self._langchain_client.agenerate([test_messages])
             
             health.update({
                 "api_accessible": True,
-                "model_available": bool(response.text),
+                "model_available": bool(response.generations and response.generations[0]),
                 "api_response_time": "< 1s"  # Simple indicator
             })
             

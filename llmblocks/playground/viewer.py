@@ -1,1 +1,0 @@
-# Logs and trace viewer

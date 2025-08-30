@@ -32,17 +32,8 @@ structlog.configure(
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         TimeStamper(fmt="iso"),
-        StackInfoRenderer(),
-        format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.ExceptionPrettyPrinter(),
-        structlog.processors.CallsiteParameterAdder(
-            parameters=["funcName", "lineno", "module"]
-        ),
-        structlog.processors.add_log_level_number,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.JSONRenderer()
     ],
     context_class=dict,

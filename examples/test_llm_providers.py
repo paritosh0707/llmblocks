@@ -111,9 +111,9 @@ async def main():
         }
     
     # Gemini configuration
-    if os.getenv("GEMINI_API_KEY"):
+    if os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"):
         test_configs["gemini"] = {
-            "api_key": os.getenv("GEMINI_API_KEY"),
+            "api_key": os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"),
             "model": "gemini-2.0-flash",
             "temperature": 0.7,
             "max_tokens": 50

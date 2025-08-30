@@ -12,7 +12,7 @@ import json
 import uuid
 
 from pydantic import Field, SecretStr, validator
-from langchain_openai import ChatOpenAI, AsyncChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatResult
 
@@ -92,9 +92,8 @@ class OpenAIProvider(BaseLLMProvider):
         self.openai_config = config
         self.logger = get_logger("OpenAIProvider")
         
-        # LangChain OpenAI clients
+        # LangChain OpenAI client
         self._langchain_client: Optional[ChatOpenAI] = None
-        self._async_langchain_client: Optional[AsyncChatOpenAI] = None
     
     async def _initialize_clients(self) -> None:
         """Initialize LangChain OpenAI clients."""
@@ -138,9 +137,8 @@ class OpenAIProvider(BaseLLMProvider):
             if self.openai_config.user:
                 client_config["user"] = self.openai_config.user
             
-            # Initialize LangChain clients
+            # Initialize LangChain client
             self._langchain_client = ChatOpenAI(**client_config)
-            self._async_langchain_client = AsyncChatOpenAI(**client_config)
             
             self.logger.info(
                 "LangChain OpenAI clients initialized",
@@ -163,9 +161,8 @@ class OpenAIProvider(BaseLLMProvider):
     
     async def _close_async_client(self) -> None:
         """Close asynchronous client."""
-        if self._async_langchain_client:
-            # LangChain async client doesn't need explicit closing
-            self._async_langchain_client = None
+        # LangChain client doesn't need explicit closing
+        pass
     
     async def _test_connection(self) -> None:
         """Test connection to OpenAI API using LangChain client."""
@@ -174,7 +171,7 @@ class OpenAIProvider(BaseLLMProvider):
             
             # Make a simple test request using LangChain
             test_messages = [HumanMessage(content="Hello")]
-            response = await self._async_langchain_client.agenerate([test_messages])
+            response = await self._langchain_client.agenerate([test_messages])
             
             if not response.generations or not response.generations[0]:
                 raise LLMConnectionError("Empty response from OpenAI API")
@@ -214,15 +211,8 @@ class OpenAIProvider(BaseLLMProvider):
             # Convert messages to LangChain format
             langchain_messages = [msg.to_langchain_message() for msg in messages]
             
-            # Update client parameters if needed
-            client_kwargs = self._prepare_client_kwargs(**kwargs)
-            if client_kwargs:
-                # Create a new client with updated parameters
-                updated_client = self._create_updated_client(**client_kwargs)
-                response = await updated_client.agenerate([langchain_messages])
-            else:
-                # Use existing client
-                response = await self._async_langchain_client.agenerate([langchain_messages])
+            # Use existing client (LangChain ChatOpenAI supports async)
+            response = await self._langchain_client.agenerate([langchain_messages])
             
             # Convert response to our format
             return self._langchain_response_to_llm_response(response)
@@ -373,7 +363,7 @@ class OpenAIProvider(BaseLLMProvider):
         
         return client_kwargs
     
-    def _create_updated_client(self, **kwargs) -> AsyncChatOpenAI:
+    def _create_updated_client(self, **kwargs) -> ChatOpenAI:
         """Create a new client with updated parameters."""
         # Get base configuration
         api_key = self.openai_config.api_key
@@ -403,7 +393,7 @@ class OpenAIProvider(BaseLLMProvider):
         if kwargs.get("stop", self.openai_config.stop):
             client_config["stop"] = kwargs.get("stop", self.openai_config.stop)
         
-        return AsyncChatOpenAI(**client_config)
+        return ChatOpenAI(**client_config)
     
     def _langchain_response_to_llm_response(self, response: ChatResult) -> LLMResponse:
         """Convert LangChain response to LLMResponse."""

@@ -1,1 +1,0 @@
-# Example: RAG with documents
