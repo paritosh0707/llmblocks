@@ -12,11 +12,11 @@ import json
 from typing import Any, Dict, List, Optional, Union, Set
 from pathlib import Path
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 import re
 
-from pydantic import BaseModel, Field, ValidationError
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, Field, ValidationError, ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..utils.logging import get_logger
 from ..utils.exceptions import (
@@ -39,9 +39,7 @@ class ConfigSource:
 
 class ConfigValidator(BaseModel):
     """Base configuration validator."""
-    
-    class Config:
-        extra = "allow"  # Allow additional fields
+    model_config = ConfigDict(extra="allow")  # Allow additional fields
 
 
 class LLMBlocksConfig(BaseSettings):
@@ -91,10 +89,11 @@ class LLMBlocksConfig(BaseSettings):
     metrics_port: int = 9090
     health_check_interval: int = 30
     
-    class Config:
-        env_prefix = "LLMBLOCKS_"
-        case_sensitive = False
-        extra = "allow"
+    model_config = SettingsConfigDict(
+        env_prefix="LLMBLOCKS_",
+        case_sensitive=False,
+        extra="allow"
+    )
 
 
 class ConfigManager:
@@ -224,7 +223,7 @@ class ConfigManager:
         self._sources.append(ConfigSource(
             source_type="default",
             priority=0,
-            loaded_at=datetime.utcnow(),
+            loaded_at=datetime.now(UTC),
             is_valid=True
         ))
     
@@ -271,7 +270,7 @@ class ConfigManager:
                 source_type="file",
                 path=str(config_path),
                 priority=10,
-                loaded_at=datetime.utcnow(),
+                loaded_at=datetime.now(UTC),
                 is_valid=True
             ))
             
@@ -298,7 +297,7 @@ class ConfigManager:
                 source_type="file",
                 path=str(config_path),
                 priority=10,
-                loaded_at=datetime.utcnow(),
+                loaded_at=datetime.now(UTC),
                 is_valid=False,
                 error_message=str(e)
             ))
@@ -332,7 +331,7 @@ class ConfigManager:
             self._sources.append(ConfigSource(
                 source_type="environment",
                 priority=20,
-                loaded_at=datetime.utcnow(),
+                loaded_at=datetime.now(UTC),
                 is_valid=True
             ))
             
@@ -392,7 +391,7 @@ class ConfigManager:
             validated_config = LLMBlocksConfig(**self._config)
             
             # Update config with validated values
-            self._config = validated_config.dict()
+            self._config = validated_config.model_dump()
             
         except ValidationError as e:
             self.logger.error(

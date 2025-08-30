@@ -9,7 +9,7 @@ import asyncio
 from abc import abstractmethod
 from typing import Any, Dict, List, Optional, Union, AsyncIterator, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 import uuid
 
@@ -128,7 +128,7 @@ class LLMResponse:
     model: Optional[str] = None
     provider: Optional[str] = None
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     # Function/tool calling support
@@ -202,7 +202,7 @@ class BaseLLMProvider(BaseChatModel):
         if isinstance(config, dict):
             config = LLMProviderConfig(**config, **kwargs)
         elif kwargs:
-            config_dict = config.dict()
+            config_dict = config.model_dump()
             config_dict.update(kwargs)
             config = LLMProviderConfig(**config_dict)
         
@@ -216,7 +216,7 @@ class BaseLLMProvider(BaseChatModel):
         self._block_id = str(uuid.uuid4())
         self._block_type = BlockType.LLM_PROVIDER
         self._status = BlockStatus.UNINITIALIZED
-        self._created_at = datetime.utcnow()
+        self._created_at = datetime.now(UTC)
         self._updated_at = self._created_at
         
         # Initialize metadata as a regular dict attribute for LangChain compatibility
@@ -265,7 +265,7 @@ class BaseLLMProvider(BaseChatModel):
     def status(self, value: BlockStatus) -> None:
         """Set the current status."""
         self._status = value
-        self._updated_at = datetime.utcnow()
+        self._updated_at = datetime.now(UTC)
         # Update metadata dict
         if hasattr(self, 'metadata'):
             self.update_metadata()
@@ -351,7 +351,7 @@ class BaseLLMProvider(BaseChatModel):
                 "model": self.model_name,
                 "total_requests": self._total_requests,
                 "total_errors": self._total_errors,
-                "uptime": (datetime.utcnow() - self.created_at).total_seconds()
+                "uptime": (datetime.now(UTC) - self.created_at).total_seconds()
             }
         except Exception as e:
             return {
@@ -617,14 +617,17 @@ class BaseLLMProvider(BaseChatModel):
     @log_performance("llm_generate")
     async def generate(
         self,
-        messages: List[LLMMessage],
+        messages: Union[str, Dict[str, str], List[Union[str, Dict[str, str], LLMMessage]]],
         **kwargs
     ) -> LLMResponse:
         """
         Generate a response from the LLM.
         
         Args:
-            messages: List of conversation messages
+            messages: Can be:
+                - str: Single user message (e.g., "Hello!")
+                - dict: Single message (e.g., {"role": "user", "content": "Hello!"})
+                - List: Multiple messages in any format above or LLMMessage objects
             **kwargs: Additional generation parameters
             
         Returns:
@@ -639,19 +642,22 @@ class BaseLLMProvider(BaseChatModel):
         # Apply rate limiting
         await self._apply_rate_limiting()
         
+        # Convert input to LLMMessage format
+        llm_messages = self._normalize_messages(messages)
+        
         # Merge generation parameters
         generation_params = self._merge_generation_params(**kwargs)
         
         try:
             # Track request
             self._total_requests += 1
-            start_time = datetime.utcnow()
+            start_time = datetime.now(UTC)
             
             # Generate response
-            response = await self._generate_impl(messages, **generation_params)
+            response = await self._generate_impl(llm_messages, **generation_params)
             
             # Update metrics
-            end_time = datetime.utcnow()
+            end_time = datetime.now(UTC)
             response_time = (end_time - start_time).total_seconds()
             self._update_metrics(response, response_time)
             
@@ -698,14 +704,17 @@ class BaseLLMProvider(BaseChatModel):
     @log_performance("llm_generate_stream")
     async def generate_stream(
         self,
-        messages: List[LLMMessage],
+        messages: Union[str, Dict[str, str], List[Union[str, Dict[str, str], LLMMessage]]],
         **kwargs
     ) -> AsyncIterator[LLMResponse]:
         """
         Generate a streaming response from the LLM.
         
         Args:
-            messages: List of conversation messages
+            messages: Can be:
+                - str: Single user message (e.g., "Hello!")
+                - dict: Single message (e.g., {"role": "user", "content": "Hello!"})
+                - List: Multiple messages in any format above or LLMMessage objects
             **kwargs: Additional generation parameters
             
         Yields:
@@ -717,9 +726,12 @@ class BaseLLMProvider(BaseChatModel):
         if not self.is_ready:
             raise LLMProviderError("Provider is not ready")
         
+        # Convert input to LLMMessage format
+        llm_messages = self._normalize_messages(messages)
+        
         if not self.is_streaming_enabled:
             # Fall back to non-streaming
-            response = await self.generate(messages, **kwargs)
+            response = await self.generate(llm_messages, **kwargs)
             yield response
             return
         
@@ -732,14 +744,14 @@ class BaseLLMProvider(BaseChatModel):
         try:
             # Track request
             self._total_requests += 1
-            start_time = datetime.utcnow()
+            start_time = datetime.now(UTC)
             
             # Generate streaming response
-            async for chunk in self._generate_stream_impl(messages, **generation_params):
+            async for chunk in self._generate_stream_impl(llm_messages, **generation_params):
                 yield chunk
             
             # Update metrics
-            end_time = datetime.utcnow()
+            end_time = datetime.now(UTC)
             response_time = (end_time - start_time).total_seconds()
             self._average_response_time = (
                 (self._average_response_time * (self._total_requests - 1) + response_time)
@@ -811,7 +823,7 @@ class BaseLLMProvider(BaseChatModel):
             return
         
         async with self._rate_limit_lock:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             
             # Clean old entries (older than 1 minute)
             cutoff = now.timestamp() - 60
@@ -865,7 +877,7 @@ class BaseLLMProvider(BaseChatModel):
             self._total_tokens += tokens_used
             
             if self.provider_config.tokens_per_minute:
-                self._token_usage.append((datetime.utcnow(), tokens_used))
+                self._token_usage.append((datetime.now(UTC), tokens_used))
     
     def _merge_generation_params(self, **kwargs) -> Dict[str, Any]:
         """Merge generation parameters with config defaults."""
@@ -898,6 +910,51 @@ class BaseLLMProvider(BaseChatModel):
 
     
     # Utility methods
+    
+    def _normalize_messages(self, messages: Union[str, Dict[str, str], List[Union[str, Dict[str, str], LLMMessage]]]) -> List[LLMMessage]:
+        """
+        Convert various input formats to List[LLMMessage].
+        
+        Args:
+            messages: Can be:
+                - str: Single user message
+                - dict: Single message with role/content
+                - List: Multiple messages in any format
+                
+        Returns:
+            List of LLMMessage objects
+        """
+        # Handle single string input
+        if isinstance(messages, str):
+            return [LLMMessage(role=LLMRole.USER, content=messages)]
+        
+        # Handle single dict input
+        if isinstance(messages, dict):
+            role = LLMRole(messages.get("role", "user"))
+            content = messages.get("content", "")
+            return [LLMMessage(role=role, content=content)]
+        
+        # Handle list input
+        if isinstance(messages, list):
+            normalized = []
+            for msg in messages:
+                if isinstance(msg, str):
+                    normalized.append(LLMMessage(role=LLMRole.USER, content=msg))
+                elif isinstance(msg, dict):
+                    role = LLMRole(msg.get("role", "user"))
+                    content = msg.get("content", "")
+                    normalized.append(LLMMessage(role=role, content=content))
+                elif isinstance(msg, LLMMessage):
+                    normalized.append(msg)
+                else:
+                    raise ValueError(f"Unsupported message type: {type(msg)}")
+            return normalized
+        
+        # Handle already normalized LLMMessage
+        if isinstance(messages, LLMMessage):
+            return [messages]
+        
+        raise ValueError(f"Unsupported messages type: {type(messages)}")
     
     def _messages_to_provider_format(self, messages: List[LLMMessage]) -> List[Dict[str, Any]]:
         """Convert LLMMessage objects to provider-specific format."""

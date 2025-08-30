@@ -7,7 +7,7 @@ with automatic discovery, configuration validation, and fallback handling.
 
 import asyncio
 from typing import Any, Dict, List, Optional, Type, Union
-from datetime import datetime
+from datetime import datetime, UTC
 import importlib
 
 from .base import BaseLLMProvider, LLMProviderConfig
@@ -44,7 +44,7 @@ class LLMProviderFactory:
         
         # Health monitoring
         self._provider_health: Dict[str, Dict[str, Any]] = {}
-        self._last_health_check = datetime.utcnow()
+        self._last_health_check = datetime.now(UTC)
         
         # Auto-register built-in providers
         self._register_builtin_providers()
@@ -54,9 +54,9 @@ class LLMProviderFactory:
     def _register_builtin_providers(self) -> None:
         """Register built-in LLM providers."""
         builtin_providers = [
-            ("openai", "OpenAIProvider", "src.llmblocks.blocks.llm_provider.openai_provider"),
-            ("gemini", "GeminiProvider", "src.llmblocks.blocks.llm_provider.gemini_provider"),
-            ("anthropic", "AnthropicProvider", "src.llmblocks.blocks.llm_provider.anthropic_provider"),
+            ("openai", "OpenAIProvider", "llmblocks.blocks.llm_provider.openai_provider"),
+            ("gemini", "GeminiProvider", "llmblocks.blocks.llm_provider.gemini_provider"),
+            ("anthropic", "AnthropicProvider", "llmblocks.blocks.llm_provider.anthropic_provider"),
         ]
         
         for provider_name, class_name, module_path in builtin_providers:
@@ -194,7 +194,7 @@ class LLMProviderFactory:
             if config is None:
                 config = {}
             elif isinstance(config, LLMProviderConfig):
-                config = config.dict()
+                config = config.model_dump()
             
             # Add provider name to config
             config["provider_name"] = provider_name
@@ -328,7 +328,7 @@ class LLMProviderFactory:
                 # Update health cache
                 self._provider_health[cache_key] = {
                     "is_healthy": health.get("is_healthy", True),
-                    "last_check": datetime.utcnow(),
+                    "last_check": datetime.now(UTC),
                     "error": None
                 }
                 
@@ -342,11 +342,11 @@ class LLMProviderFactory:
                 # Update health cache
                 self._provider_health[cache_key] = {
                     "is_healthy": False,
-                    "last_check": datetime.utcnow(),
+                    "last_check": datetime.now(UTC),
                     "error": str(e)
                 }
         
-        self._last_health_check = datetime.utcnow()
+        self._last_health_check = datetime.now(UTC)
         return health_results
     
     async def cleanup_unhealthy_providers(self) -> int:

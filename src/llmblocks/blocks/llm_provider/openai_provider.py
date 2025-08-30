@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, AsyncIterator
 import json
 import uuid
 
-from pydantic import Field, SecretStr, validator
+from pydantic import Field, SecretStr, field_validator
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatResult
@@ -49,7 +49,8 @@ class OpenAIProviderConfig(LLMProviderConfig):
     logit_bias: Optional[Dict[str, float]] = Field(default=None, description="Logit bias")
     user: Optional[str] = Field(default=None, description="User identifier")
     
-    @validator('model')
+    @field_validator('model')
+    @classmethod
     def validate_model(cls, v):
         """Validate OpenAI model name."""
         valid_models = [

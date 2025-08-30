@@ -13,7 +13,7 @@ from datetime import datetime
 import asyncio
 import uuid
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from structlog import get_logger
 
 from ..utils.exceptions import BlockInitializationError, BlockValidationError
@@ -58,6 +58,8 @@ class BlockMetadata:
 
 class BlockConfig(BaseModel):
     """Base configuration for blocks."""
+    model_config = ConfigDict(extra="allow")  # Allow additional configuration fields
+    
     name: Optional[str] = None
     description: Optional[str] = None
     enabled: bool = True
@@ -66,9 +68,6 @@ class BlockConfig(BaseModel):
     retry_delay: float = 1.0
     max_concurrent_requests: Optional[int] = None
     log_level: str = "INFO"
-    
-    class Config:
-        extra = "allow"  # Allow additional configuration fields
 
 
 class BaseBlock(ABC):
@@ -329,7 +328,7 @@ class BaseBlock(ABC):
             if isinstance(config, dict):
                 config_dict = {**config, **kwargs}
             elif config is not None:
-                config_dict = {**config.dict(), **kwargs}
+                config_dict = {**config.model_dump(), **kwargs}
             else:
                 config_dict = kwargs
             

@@ -9,7 +9,7 @@ import asyncio
 from typing import Any, Dict, List, Optional, Type, Union, Callable
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 import inspect
 import uuid
 
@@ -79,8 +79,8 @@ class BlockRegistry:
         
         # Registry metadata
         self._registry_id = str(uuid.uuid4())
-        self._created_at = datetime.utcnow()
-        self._last_updated = datetime.utcnow()
+        self._created_at = datetime.now(UTC)
+        self._last_updated = datetime.now(UTC)
         
         self.logger.info(
             "Block registry initialized",
@@ -174,7 +174,7 @@ class BlockRegistry:
             tags=tags or [],
             dependencies=dependencies or [],
             config_schema=config_schema or {},
-            registered_at=datetime.utcnow()
+            registered_at=datetime.now(UTC)
         )
         
         # Register the block
@@ -192,7 +192,7 @@ class BlockRegistry:
             self._reverse_dependencies[dep].append(block_id)
         
         # Update registry
-        self._last_updated = datetime.utcnow()
+        self._last_updated = datetime.now(UTC)
         
         self.logger.info(
             "Block registered",
@@ -244,7 +244,7 @@ class BlockRegistry:
         del self._blocks[block_id]
         
         # Update registry
-        self._last_updated = datetime.utcnow()
+        self._last_updated = datetime.now(UTC)
         
         self.logger.info(
             "Block unregistered",
@@ -398,7 +398,7 @@ class BlockRegistry:
             self._block_instances[block_id] = block_instance
             
             # Update usage statistics
-            block_info.last_used = datetime.utcnow()
+            block_info.last_used = datetime.now(UTC)
             block_info.usage_count += 1
             
             self.logger.info(
@@ -616,7 +616,7 @@ class BlockRegistry:
         self._dependencies.clear()
         self._reverse_dependencies.clear()
         
-        self._last_updated = datetime.utcnow()
+        self._last_updated = datetime.now(UTC)
         
         self.logger.info("Registry cleared")
     

@@ -8,6 +8,7 @@ with structured logging, performance metrics, and configurable output formats.
 import sys
 import logging
 import json
+import os
 from typing import Any, Dict, Optional, Union
 from datetime import datetime
 from pathlib import Path
@@ -24,23 +25,57 @@ from structlog.processors import (
 from structlog.typing import FilteringBoundLogger
 
 
-# Configure structlog to work with standard library logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        TimeStamper(fmt="iso"),
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.ExceptionPrettyPrinter(),
-        structlog.processors.JSONRenderer()
-    ],
-    context_class=dict,
-    logger_factory=LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
+# Check if logging is enabled via environment variable
+LOGGING_ENABLED = os.getenv('LLMBLOCKS_ENABLE_LOGGING', 'false').lower() in ('true', '1', 'yes', 'on')
+LOG_FORMAT = os.getenv('LLMBLOCKS_LOG_FORMAT', 'readable').lower()  # 'readable' or 'json'
+
+def _configure_logging():
+    """Configure structlog based on environment settings."""
+    if not LOGGING_ENABLED:
+        # Disable logging by setting level to CRITICAL+1
+        logging.getLogger().setLevel(logging.CRITICAL + 1)
+        # Use minimal processors
+        processors = [
+            structlog.stdlib.filter_by_level,
+            structlog.dev.set_exc_info,
+            structlog.processors.add_log_level,
+            structlog.dev.ConsoleRenderer()
+        ]
+    else:
+        # Enable logging with appropriate format
+        if LOG_FORMAT == 'json':
+            processors = [
+                structlog.stdlib.filter_by_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                TimeStamper(fmt="iso"),
+                structlog.processors.UnicodeDecoder(),
+                structlog.processors.ExceptionPrettyPrinter(),
+                JSONRenderer()
+            ]
+        else:  # readable format
+            processors = [
+                structlog.stdlib.filter_by_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+                structlog.processors.UnicodeDecoder(),
+                structlog.processors.ExceptionPrettyPrinter(),
+                structlog.dev.ConsoleRenderer(colors=True)
+            ]
+    
+    structlog.configure(
+        processors=processors,
+        context_class=dict,
+        logger_factory=LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+# Configure logging on import
+_configure_logging()
 
 
 class LLMBlocksLogger:
@@ -310,6 +345,35 @@ class TimerContext:
             )
 
 
+class NoOpLogger:
+    """No-operation logger that does nothing when logging is disabled."""
+    
+    def __init__(self, name: str):
+        self.name = name
+    
+    def debug(self, *args, **kwargs): pass
+    def info(self, *args, **kwargs): pass
+    def warning(self, *args, **kwargs): pass
+    def error(self, *args, **kwargs): pass
+    def critical(self, *args, **kwargs): pass
+    def log(self, *args, **kwargs): pass
+    def exception(self, *args, **kwargs): pass
+    
+    def bind(self, **kwargs): return self
+    def unbind(self, *args): return self
+    
+    def start_timer(self, name: str): pass
+    def end_timer(self, name: str): pass
+    def increment_counter(self, name: str, value: int = 1): pass
+    def set_gauge(self, name: str, value: float): pass
+    def get_metrics(self): return {"timers": {}, "counters": {}, "gauges": {}}
+    
+    def time_operation(self, name: str):
+        """No-op context manager for timing operations."""
+        from contextlib import nullcontext
+        return nullcontext()
+
+
 # Global logger instance
 _default_logger: Optional[LLMBlocksLogger] = None
 
@@ -317,9 +381,10 @@ _default_logger: Optional[LLMBlocksLogger] = None
 def get_logger(
     name: Optional[str] = None,
     level: str = "INFO",
-    output_format: str = "json",
+    output_format: Optional[str] = None,
     log_file: Optional[Union[str, Path]] = None,
-    enable_metrics: bool = True
+    enable_metrics: bool = True,
+    force_enable: bool = False
 ) -> LLMBlocksLogger:
     """
     Get a logger instance.
@@ -327,9 +392,10 @@ def get_logger(
     Args:
         name: Logger name (defaults to calling module name)
         level: Logging level
-        output_format: Output format
+        output_format: Output format ("json" or "readable", defaults to env setting)
         log_file: Optional log file path
         enable_metrics: Whether to enable performance metrics
+        force_enable: Force enable logging regardless of env setting
         
     Returns:
         Configured logger instance
@@ -352,6 +418,15 @@ def get_logger(
     
     if name is None:
         name = 'llmblocks'
+    
+    # Check if logging should be enabled
+    if not LOGGING_ENABLED and not force_enable:
+        # Return a no-op logger
+        return NoOpLogger(name)
+    
+    # Use environment settings if not specified
+    if output_format is None:
+        output_format = LOG_FORMAT
     
     # Create new logger instance
     return LLMBlocksLogger(

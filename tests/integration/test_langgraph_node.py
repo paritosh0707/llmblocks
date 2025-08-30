@@ -25,8 +25,8 @@ except ImportError:
 except Exception as e:
     print(f"⚠️  Could not load .env file: {e}")
 
-from src.llmblocks.blocks.llm_provider import get_provider
-from src.llmblocks.utils.logging import setup_logging
+from llmblocks.blocks.llm_provider import get_provider
+from llmblocks.utils.logging import setup_logging
 
 
 def create_langgraph_node_safe(provider, node_name: str = "llm"):

@@ -6,11 +6,17 @@ This document contains comprehensive instructions, project knowledge, and import
 
 **LLMBlocks** is a modular, enterprise-grade AI application framework designed as "Lego blocks for AI applications." The project follows a phased development approach with a block-based architecture.
 
-### **Current Status (January 2025)**
-- **Phase 1 & 2**: ✅ **COMPLETE** - Foundation + LLM Provider System
+### **Current Status (August 2025)**
+- **Phase 1 & 2**: ✅ **COMPLETE** - Foundation + LLM Provider System + User Experience Improvements
 - **Phase 3**: 🚧 **NEXT** - Memory & State Management  
 - **Phase 4**: 🚧 **PLANNED** - RAG & Agent Systems
 - **Phase 5**: 🚧 **PLANNED** - Developer Experience & Playground
+
+### **Latest Updates (August 2025)**
+- ✅ **Simplified Input Format** - No more LLMMessage objects required
+- ✅ **Environment-Controlled Logging** - Clean output by default
+- ✅ **Deprecation Fixes** - Updated to latest LangChain/Pydantic patterns
+- ✅ **LangChain-Style API** - String/dict input like LangChain
 
 ## 🏗️ **Architecture Decisions**
 
@@ -96,7 +102,118 @@ def create_compatible_graph(llm_node, node_name):
         return False, fallback_graph, str(e)
 ```
 
-### **5. Metadata Compatibility**
+### **5. Simplified Input Format (August 2025)**
+
+**MAJOR IMPROVEMENT**: Users no longer need to create LLMMessage objects manually.
+
+#### **The Problem**
+```python
+# Old way - Complex and verbose
+from llmblocks.blocks.llm_provider import get_provider, LLMMessage, LLMRole
+provider = await get_provider("gemini", api_key=api_key)
+response = await provider.generate([LLMMessage(role=LLMRole.USER, content="Hello!")])
+```
+
+#### **The Solution**
+```python
+# New way - Simple and intuitive
+from llmblocks.blocks.llm_provider import get_provider
+provider = await get_provider("gemini", api_key=api_key)
+response = await provider.generate("Hello!")  # Just a string!
+
+# Or dict format (LangChain-style)
+response = await provider.generate({"role": "user", "content": "Hello!"})
+
+# Or multiple messages
+response = await provider.generate([
+    {"role": "user", "content": "Hello!"},
+    {"role": "assistant", "content": "Hi there!"},
+    {"role": "user", "content": "How are you?"}
+])
+```
+
+**Implementation**: Added `_normalize_messages()` method in `BaseLLMProvider` that converts:
+- `str` → `[LLMMessage(role=USER, content=str)]`
+- `dict` → `[LLMMessage(role=dict["role"], content=dict["content"])]`
+- `List[Union[str, dict, LLMMessage]]` → `List[LLMMessage]`
+
+### **6. Environment-Controlled Logging (August 2025)**
+
+**MAJOR IMPROVEMENT**: Clean output by default, logging only when needed.
+
+#### **The Problem**
+```bash
+# Old way - Always verbose JSON logging
+🚀 LLMBlocks Hello World - Just 3 lines!
+2025-08-30 15:33:00,903 - TraceCollector - INFO - {"timestamp": "2025-08-30T10:03:00.903700Z", "logger": "TraceCollector"...
+# 50+ lines of JSON spam
+🤖 AI Response: Hello!
+```
+
+#### **The Solution**
+```bash
+# New way - Clean by default
+🚀 LLMBlocks Hello World - Just 3 lines!
+🤖 AI Response: Hello!
+✅ That's it! Just 3 lines of code for AI power!
+
+# Enable logging when debugging
+LLMBLOCKS_ENABLE_LOGGING=true uv run python example.py
+# Now shows readable logs when needed
+```
+
+**Environment Variables**:
+- `LLMBLOCKS_ENABLE_LOGGING=false` (default) - No logging
+- `LLMBLOCKS_ENABLE_LOGGING=true` - Enable logging
+- `LLMBLOCKS_LOG_FORMAT=readable` (default) - Human-readable format
+- `LLMBLOCKS_LOG_FORMAT=json` - JSON format for production
+
+**Implementation**: 
+- Updated `src/llmblocks/utils/logging.py` with environment-controlled configuration
+- Added `NoOpLogger` class for disabled logging
+- Modified `get_logger()` to respect environment settings
+
+### **7. Deprecation Fixes (August 2025)**
+
+**CRITICAL UPDATES**: Removed all deprecated code patterns.
+
+#### **Fixed Deprecations**:
+1. **LangChain Google GenAI**: Removed `convert_system_message_to_human=True` (deprecated)
+2. **Pydantic v2**: Updated `@validator` → `@field_validator` with `@classmethod`
+
+#### **Before (Deprecated)**:
+```python
+from pydantic import validator
+
+class Config(BaseModel):
+    @validator('model')
+    def validate_model(cls, v):  # Missing @classmethod
+        return v
+
+# LangChain config
+client_config = {
+    "convert_system_message_to_human": True,  # Deprecated!
+}
+```
+
+#### **After (Modern)**:
+```python
+from pydantic import field_validator
+
+class Config(BaseModel):
+    @field_validator('model')
+    @classmethod  # Required in Pydantic v2
+    def validate_model(cls, v):
+        return v
+
+# LangChain config - system messages handled natively
+client_config = {
+    # Note: convert_system_message_to_human is deprecated
+    # System messages are now handled natively by the model
+}
+```
+
+### **8. Metadata Compatibility**
 
 **CRITICAL ISSUE**: LangChain's callback system expects `metadata` to be a mutable dict.
 
@@ -401,19 +518,35 @@ refactor: Improve error handling
 
 ### **Test Execution**
 ```bash
-# Run specific test
-python examples/test_gemini_simple.py
+# Setup checker
+uv run python examples/minimal/00_check_setup.py
 
-# Run with environment setup
-echo "GOOGLE_API_KEY=your-key" > .env
-python examples/test_gemini_simple.py
+# Minimal examples (clean output)
+uv run python examples/minimal/01_hello_world.py        # 3 lines
+uv run python examples/minimal/02_smart_chatbot.py      # 5 lines  
+uv run python examples/minimal/03_streaming_ai.py       # 4 lines
 
-# Test LangChain compatibility
-python examples/test_latest_compatibility.py
+# With logging enabled
+LLMBLOCKS_ENABLE_LOGGING=true uv run python examples/minimal/01_hello_world.py
 
-# Test LangGraph features
-python examples/test_latest_langgraph.py
+# Integration tests
+uv run python tests/integration/test_gemini_simple.py
+uv run python tests/integration/test_latest_compatibility.py
 ```
+
+### **Current Examples (August 2025)**
+
+| Example | Lines | Input Format | Output |
+|---------|-------|--------------|--------|
+| `00_check_setup.py` | Setup | N/A | Dependency verification |
+| `01_hello_world.py` | **3** | `"Hello!"` | Clean AI response |
+| `02_smart_chatbot.py` | **5** | `{"role": "user", "content": "..."}` | Interactive chat |
+| `03_streaming_ai.py` | **4** | `"Tell me a story"` | Real-time streaming |
+| `04_multi_provider.py` | **6** | Multiple formats | Provider switching |
+| `05_langchain_magic.py` | **3** | LangChain integration | Ecosystem compatibility |
+| `06_ai_workflow.py` | **7** | LangGraph workflow | Complete workflow |
+| `07_production_ready.py` | **10** | Enterprise features | Monitoring & observability |
+| `08_zero_config.py` | **2** | Absolute minimum | Zero configuration |
 
 ### **Test Requirements**
 - All tests must handle missing API keys gracefully
@@ -549,6 +682,15 @@ When working on LLMBlocks:
 8. **ALWAYS** add tests for new functionality
 9. **ALWAYS** update documentation
 10. **ALWAYS** follow the established patterns
+
+### **🆕 New Patterns (August 2025):**
+
+11. **ALWAYS** support simplified input formats (str/dict/list)
+12. **ALWAYS** use environment-controlled logging (`LLMBLOCKS_ENABLE_LOGGING`)
+13. **ALWAYS** use modern Pydantic patterns (`@field_validator` + `@classmethod`)
+14. **NEVER** use deprecated LangChain parameters (`convert_system_message_to_human`)
+15. **ALWAYS** provide clean output by default (no logging spam)
+16. **ALWAYS** make APIs LangChain-compatible for user familiarity
 
 **Remember**: LLMBlocks is production-ready for LLM providers. Focus on maintaining this quality as we expand to memory, RAG, and agent systems in future phases.
 

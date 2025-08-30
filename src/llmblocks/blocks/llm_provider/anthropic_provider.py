@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, AsyncIterator
 import json
 import uuid
 
-from pydantic import Field, SecretStr, validator
+from pydantic import Field, SecretStr, field_validator
 import anthropic
 from anthropic import AsyncAnthropic
 
@@ -44,7 +44,8 @@ class AnthropicProviderConfig(LLMProviderConfig):
     system: Optional[str] = Field(default=None, description="System message")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Request metadata")
     
-    @validator('model')
+    @field_validator('model')
+    @classmethod
     def validate_model(cls, v):
         """Validate Anthropic model name."""
         valid_models = [

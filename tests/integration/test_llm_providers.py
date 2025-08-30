@@ -16,13 +16,13 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.llmblocks.blocks.llm_provider import (
+from llmblocks.blocks.llm_provider import (
     get_provider,
     list_available_providers,
     LLMMessage,
     LLMRole
 )
-from src.llmblocks.utils.logging import setup_logging
+from llmblocks.utils.logging import setup_logging
 
 
 async def test_provider(provider_name: str, config: dict):

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, AsyncIterator
 import json
 import uuid
 
-from pydantic import Field, SecretStr, validator
+from pydantic import Field, SecretStr, field_validator
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatResult
@@ -50,7 +50,8 @@ class GeminiProviderConfig(LLMProviderConfig):
         description="Safety settings for content filtering"
     )
     
-    @validator('model')
+    @field_validator('model')
+    @classmethod
     def validate_model(cls, v):
         """Validate Gemini model name."""
         valid_models = [
@@ -113,7 +114,8 @@ class GeminiProvider(BaseLLMProvider):
                 "google_api_key": api_key,
                 "temperature": self.gemini_config.temperature,
                 "top_p": self.gemini_config.top_p,
-                "convert_system_message_to_human": True,  # Handle system messages
+                # Note: convert_system_message_to_human is deprecated
+                # System messages are now handled natively by the model
             }
             
             # Add max_tokens if specified
