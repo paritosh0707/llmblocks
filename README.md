@@ -51,64 +51,90 @@ LLMBlocks is a **modular, configurable framework** that enables developers to bu
 ### **Installation**
 
 ```bash
-# Install from PyPI (coming soon)
-pip install llmblocks
-
-# Or install from source
-git clone https://github.com/llmblocks/llmblocks.git
+# Clone the repository
+git clone https://github.com/paritosh0707/llmblocks.git
 cd llmblocks
-pip install -e .
+
+# Install with uv (recommended)
+uv sync
+
+# Or install with pip
+pip install -e ".[dev]"
 ```
 
-### **Your First Chatbot in 5 Minutes**
+> **Note**: Currently in active development. The LLM Provider system is production-ready, with Memory, RAG, and Agent systems coming in future phases.
 
-1. **Create a configuration file** (`chatbot.yaml`):
+### **Your First LLM Provider in 5 Minutes**
 
-```yaml
-name: "My First Chatbot"
-description: "A helpful AI assistant"
-system_prompt: "You are a friendly and knowledgeable AI assistant."
+1. **Set up your environment**:
 
-llm:
-  provider: "openai"
-  model: "gpt-4"
-  temperature: 0.7
-  api_key:
-    env_var: "OPENAI_API_KEY"
-
-memory:
-  provider_name: "in-memory"
+```bash
+# Create a .env file
+echo "GOOGLE_API_KEY=your-google-api-key" > .env
 ```
 
 2. **Write the code**:
 
 ```python
-from llmblocks import Chatbot
+from src.llmblocks.blocks.llm_provider import get_provider
 
-# Create chatbot from config
-chatbot = Chatbot(config_yaml_path="chatbot.yaml")
+# Create a Gemini provider
+provider = get_provider(
+    provider_name="gemini",
+    api_key="your-google-api-key",
+    model="gemini-2.0-flash-exp"
+)
 
-# Start chatting!
-response = chatbot.chat("Hello! What can you help me with?")
-print(response)
+# Use it directly
+response = await provider.generate("Hello! What can you help me with?")
+print(response.content)
+
+# Or use with LangChain
+langchain_llm = provider.as_langchain()
+result = langchain_llm.invoke("Tell me about AI")
+print(result.content)
+
+# Or create a LangGraph node
+llm_node = provider.create_langgraph_node("assistant")
 ```
 
 3. **Run it**:
 
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
-python your_chatbot.py
+python examples/test_gemini_simple.py
 ```
+
+## 📊 **Current Status**
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| **🔥 LLM Providers** | ✅ **Production Ready** | OpenAI, Gemini, Anthropic with full LangChain/LangGraph compatibility |
+| **🏗️ Core Architecture** | ✅ **Complete** | Base blocks, registry, config, logging, tracing, utilities |
+| **🧪 Testing Suite** | ✅ **Comprehensive** | 7 test files covering all major functionality |
+| **📚 Documentation** | ✅ **Complete** | README, docs, and agent knowledge base |
+| **🧠 Memory System** | 🚧 **Planned Phase 3** | In-memory, Redis, PostgreSQL, Vector stores |
+| **🔍 RAG System** | 🚧 **Planned Phase 4** | Document loaders, retrievers, RAG chains |
+| **🤖 Agent System** | 🚧 **Planned Phase 4** | Multi-tool agents, conversation agents |
+| **🎮 Playground** | 🚧 **Planned Phase 5** | Web-based development environment |
+| **⚙️ CLI Tools** | 🚧 **Planned Phase 5** | Project scaffolding, deployment tools |
 
 ## 🧱 **Available Blocks**
 
-### **LLM Providers**
-- **OpenAI** - GPT-4, GPT-3.5, DALL-E
-- **Azure OpenAI** - Enterprise OpenAI with Azure
-- **Google Gemini** - Pro, Flash, Vision models
-- **Anthropic Claude** - Opus, Sonnet, Haiku
-- **Local Models** - Via Ollama integration
-- **Custom Providers** - Easy to add your own
+### **LLM Providers** ✅ **Production Ready**
+- **✅ Google Gemini** - 2.0 Flash, Pro models with full async support
+- **✅ OpenAI** - GPT-4, GPT-3.5 with LangChain integration  
+- **✅ Anthropic Claude** - Claude 3.5 Sonnet, Haiku with streaming
+- **🚧 Azure OpenAI** - Planned (provider exists but needs testing)
+- **🚧 Local Models** - Planned (Ollama, LM Studio integration)
+- **✅ Custom Providers** - Easy to extend BaseLLMProvider
+
+**Features:**
+- 🔄 **Async/Sync Support** - All providers support both modes
+- 🌊 **Streaming** - Real-time response streaming
+- 🔗 **LangChain Compatible** - Direct integration with LangChain ecosystem
+- 📊 **LangGraph Ready** - Create nodes and graphs easily
+- 🛡️ **Error Handling** - Comprehensive retry logic and error management
+- 📈 **Observability** - Built-in tracing and monitoring
 
 ### **Memory Systems**
 - **In-Memory** - Fast, temporary storage
